@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import AppLayout from '@/app/layouts/AppLayout';
+import { AttendancePage } from '@/modules/attendance/pages/AttendancePage';
 import { ProtectedRoute } from '@/app/router/ProtectedRoute';
 import LoginPage from '@/modules/auth/pages/LoginPage';
 import { DashboardPage } from '@/modules/dashboard/pages/DashboardPage';
@@ -24,6 +25,7 @@ export function AppRouter() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="attendance" element={<AttendancePage />} />
         <Route
           path="employees"
           element={

@@ -2,9 +2,20 @@ import { Response } from 'express';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { authService } from '../services';
 import { asyncHandler } from '../utils/http';
+import { extractRequestMetadata } from '../utils/requestMetadata';
 export const loginUser = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { email, password } = req.body as { email: string; password: string };
-  const result = await authService.login(email, password);
+  const { email, password, latitude, longitude } = req.body as {
+    email: string;
+    password: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  const metadata = extractRequestMetadata(req);
+  const result = await authService.login(email, password, {
+    ...metadata,
+    latitude,
+    longitude,
+  });
 
   res.cookie('accessToken', result.accessToken, {
     httpOnly: true,

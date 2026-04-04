@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Outlet, NavLink } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 import { 
@@ -13,7 +15,22 @@ export default function AppLayout() {
   const { theme, toggleTheme } = useTheme();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
+  const { data: attendanceOverview } = useQuery({
+    queryKey: ['attendance'],
+    queryFn: () => api.get('/attendance/me').then((res: any) => res.data),
+    enabled: !!user,
+  });
+
   if (!user) return null;
+
+  const todayAttendance = attendanceOverview?.today;
+  const attendanceStatus = user.role === 'SUPER_ADMIN'
+    ? 'Attendance Exempt'
+    : todayAttendance
+      ? todayAttendance.checkOutAt
+        ? 'Checked Out'
+        : `Checked In · ${todayAttendance.workMode === 'OFFICE' ? 'Office' : todayAttendance.workMode === 'WFH' ? 'WFH' : 'Other'}`
+      : 'Not Checked In';
 
   const handleLogout = async () => {
     await logout();
@@ -21,10 +38,11 @@ export default function AppLayout() {
 
   const menu = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER', 'EMPLOYEE'] },
+    { name: 'Attendance', icon: Clock, path: '/attendance', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER', 'EMPLOYEE'] },
     { name: 'Employees', icon: Users, path: '/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
     { name: 'Departments', icon: Building2, path: '/departments', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
     { name: 'Projects', icon: Briefcase, path: '/projects', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER', 'EMPLOYEE'] },
-    { name: 'Timesheets', icon: Clock, path: '/timesheets', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER', 'EMPLOYEE'] },
+    { name: 'Timesheets', icon: Calendar, path: '/timesheets', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER', 'EMPLOYEE'] },
     { name: 'Payroll', icon: DollarSign, path: '/payroll', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'EMPLOYEE'] },
     { name: 'Leaves', icon: Calendar, path: '/leaves', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'EMPLOYEE'] },
   ];
@@ -142,6 +160,13 @@ export default function AppLayout() {
         <header className="h-16 border-b bg-white/50 backdrop-blur-sm dark:bg-zinc-900/50 flex flex-shrink-0 items-center justify-between px-8">
           <h1 className="text-lg font-semibold text-foreground tracking-tight ">{/* dynamic title could go here */} Overview</h1>
           <div className="flex items-center gap-4">
+             <NavLink
+               to="/attendance"
+               className="hidden items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300 md:inline-flex"
+             >
+               <Clock className="h-4 w-4" />
+               {attendanceStatus}
+             </NavLink>
              <button
                onClick={toggleTheme}
                className="inline-flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-muted text-muted-foreground transition-colors"

@@ -1,3 +1,4 @@
+import * as attendanceRepository from './attendance.repository';
 import * as authRepository from './auth.repository';
 import * as dashboardRepository from './dashboard.repository';
 import * as departmentsRepository from './departments.repository';
@@ -8,6 +9,7 @@ import * as timesheetsRepository from './timesheets.repository';
 import * as usersRepository from './users.repository';
 
 export {
+  attendanceRepository,
   authRepository,
   dashboardRepository,
   departmentsRepository,

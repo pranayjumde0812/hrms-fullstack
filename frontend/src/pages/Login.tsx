@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui/components';
+import { getSilentLocation } from '@/shared/location/getSilentLocation';
 import { Briefcase } from 'lucide-react';
 
 export default function Login() {
@@ -17,7 +18,12 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      await login({ email, password });
+      const location = await getSilentLocation();
+      await login({
+        email,
+        password,
+        ...(location ?? {}),
+      });
       navigate('/');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed');

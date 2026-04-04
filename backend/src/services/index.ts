@@ -1,3 +1,4 @@
+import * as attendanceService from './attendance.service';
 import * as authService from './auth.service';
 import * as dashboardService from './dashboard.service';
 import * as departmentsService from './departments.service';
@@ -8,6 +9,7 @@ import * as timesheetsService from './timesheets.service';
 import * as usersService from './users.service';
 
 export {
+  attendanceService,
   authService,
   dashboardService,
   departmentsService,

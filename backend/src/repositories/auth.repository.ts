@@ -13,3 +13,7 @@ export const findUserById = (id: UserId) => {
     select: { id: true, email: true, firstName: true, lastName: true, role: true, departmentId: true },
   });
 };
+
+export const createLoginActivity = (data: Prisma.LoginActivityUncheckedCreateInput) => {
+  return prisma.loginActivity.create({ data });
+};

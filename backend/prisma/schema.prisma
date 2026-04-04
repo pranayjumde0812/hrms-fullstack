@@ -23,6 +23,12 @@ enum TimesheetStatus {
   REJECTED
 }
 
+enum WorkMode {
+  WFH
+  OFFICE
+  OTHER
+}
+
 // ----------------------------------------------------
 // ENTITIES
 // ----------------------------------------------------
@@ -41,6 +47,8 @@ model User {
   department     Department? @relation(fields: [departmentId], references: [id])
   projects       Project[]   @relation("UserProjects")
   timesheets     Timesheet[]
+  attendances    Attendance[]
+  loginActivities LoginActivity[]
   payrolls       Payroll[]
   leaves         Leave[]
   
@@ -117,4 +125,45 @@ model Leave {
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Attendance {
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  attendanceDate    DateTime
+  workMode          WorkMode
+  checkInAt         DateTime
+  checkOutAt        DateTime?
+  checkInLatitude   Float?
+  checkInLongitude  Float?
+  checkOutLatitude  Float?
+  checkOutLongitude Float?
+  checkInIpAddress  String?
+  checkOutIpAddress String?
+  checkInUserAgent  String?
+  checkOutUserAgent String?
+
+  user              User     @relation(fields: [userId], references: [id])
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, attendanceDate])
+}
+
+model LoginActivity {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  ipAddress     String?
+  userAgent     String?
+  latitude      Float?
+  longitude     Float?
+  locationLabel String?
+  loggedInAt    DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id])
+
+  createdAt     DateTime @default(now())
+
+  @@index([userId, loggedInAt])
 }

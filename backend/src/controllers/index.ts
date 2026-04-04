@@ -1,3 +1,4 @@
+import * as attendanceController from './attendance.controller';
 import * as authController from './auth.controller';
 import * as dashboardController from './dashboard.controller';
 import * as departmentsController from './departments.controller';
@@ -8,6 +9,7 @@ import * as timesheetsController from './timesheets.controller';
 import * as usersController from './users.controller';
 
 export {
+  attendanceController,
   authController,
   dashboardController,
   departmentsController,

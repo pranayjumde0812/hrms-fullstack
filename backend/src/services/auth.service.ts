@@ -2,7 +2,16 @@ import jwt from 'jsonwebtoken';
 import { authRepository } from '../repositories';
 import { AppError } from '../utils/http';
 
-export const login = async (email: string, password: string) => {
+export const login = async (
+  email: string,
+  password: string,
+  metadata?: {
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    latitude?: number;
+    longitude?: number;
+  },
+) => {
   const user = await authRepository.findUserByEmail(email);
 
   if (!user || user.password !== password) {
@@ -14,6 +23,15 @@ export const login = async (email: string, password: string) => {
     process.env.JWT_SECRET || 'super-secret-jwt-key-change-in-prod',
     { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn'] },
   );
+
+  await authRepository.createLoginActivity({
+    userId: user.id,
+    ipAddress: metadata?.ipAddress,
+    userAgent: metadata?.userAgent,
+    latitude: metadata?.latitude,
+    longitude: metadata?.longitude,
+    locationLabel: metadata?.latitude != null && metadata?.longitude != null ? 'browser-geolocation' : 'request-metadata',
+  });
 
   const { password: _password, ...safeUser } = user;
 
