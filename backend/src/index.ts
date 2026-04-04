@@ -1,0 +1,44 @@
+import express from 'express';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import dotenv from 'dotenv';
+import authRoutes from './routes/auth';
+import userRoutes from './routes/users';
+import departmentRoutes from './routes/departments';
+import projectRoutes from './routes/projects';
+import timesheetRoutes from './routes/timesheets';
+import payrollRoutes from './routes/payroll';
+import leaveRoutes from './routes/leaves';
+import dashboardRoutes from './routes/dashboard';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Middleware
+app.use(cors({
+  origin: 'http://localhost:5173', // Vite default port
+  credentials: true
+}));
+app.use(express.json());
+app.use(cookieParser());
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/departments', departmentRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/timesheets', timesheetRoutes);
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/leaves', leaveRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ success: true, message: 'NexusHR API is running', data: null });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});

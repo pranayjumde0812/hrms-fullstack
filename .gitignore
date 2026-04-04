@@ -1,0 +1,80 @@
+# ----------------------
+# Node modules
+# ----------------------
+node_modules/
+**/node_modules/
+
+# ----------------------
+# Environment variables
+# ----------------------
+.env
+.env.*
+!.env.example
+
+# ----------------------
+# Logs
+# ----------------------
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ----------------------
+# Build / Output folders
+# ----------------------
+dist/
+build/
+out/
+.next/
+coverage/
+
+# ----------------------
+# Prisma
+# ----------------------
+prisma/*.db
+prisma/*.db-journal
+
+# ----------------------
+# TypeScript
+# ----------------------
+*.tsbuildinfo
+
+# ----------------------
+# OS files
+# ----------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------
+# IDE / Editor
+# ----------------------
+.vscode/
+.idea/
+*.swp
+
+# ----------------------
+# Docker
+# ----------------------
+docker-compose.override.yml
+
+# ----------------------
+# Misc
+# ----------------------
+*.txt
+errors.txt
+typescript_output*.txt
+prisma_error_log.txt
+
+# ----------------------
+# Node binary folder (you added manually)
+# ----------------------
+node-v*/ 
+
+# ----------------------
+# Yarn / npm cache
+# ----------------------
+.yarn/
+.pnp.*
+.cache/
