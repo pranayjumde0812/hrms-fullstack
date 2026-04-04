@@ -10,6 +10,7 @@ import timesheetRoutes from './routes/timesheets';
 import payrollRoutes from './routes/payroll';
 import leaveRoutes from './routes/leaves';
 import dashboardRoutes from './routes/dashboard';
+import { errorMiddleware } from './middlewares/errorMiddleware';
 import { seedSuperAdminIfNeeded } from './utils/seedSuperAdmin';
 
 dotenv.config();
@@ -39,6 +40,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'NexusHR API is running', data: null });
 });
+
+app.use(errorMiddleware);
 
 const startServer = async () => {
   try {
