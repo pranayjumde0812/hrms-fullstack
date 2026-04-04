@@ -15,7 +15,7 @@ Status guide:
 - `[x]` Monthly attendance drawer with month-wise blocks
 - `[x]` Super Admin attendance exemption
 - `[x]` Attendance regularization request
-- `[ ]` Late mark and half-day calculation
+- `[x]` Late mark and half-day calculation
 - `[ ]` Overtime tracking and approval
 - `[ ]` Attendance remarks and manual HR correction
 - `[ ]` Holiday and weekly-off attendance handling

@@ -1,4 +1,5 @@
 import {
+  AttendanceDayStatus,
   AttendanceRegularizationStatus,
   AttendanceRegularizationType,
   Role,
@@ -13,6 +14,11 @@ const getStartOfToday = () => {
 };
 
 const ATTENDANCE_REVIEW_ROLES: Role[] = ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER'];
+const LATE_AFTER_HOUR = 10;
+const LATE_AFTER_MINUTE = 15;
+const HALF_DAY_AFTER_HOUR = 13;
+const HALF_DAY_AFTER_MINUTE = 0;
+const HALF_DAY_MIN_WORKING_HOURS = 4.5;
 
 const ensureAttendanceRequired = (role: Role) => {
   if (role === 'SUPER_ADMIN') {
@@ -29,6 +35,32 @@ const getAttendanceDateFromString = (value: string) => {
 };
 
 const combineDateAndTime = (dateString: string, timeString: string) => new Date(`${dateString}T${timeString}:00`);
+
+const getMinuteOfDay = (date: Date) => date.getHours() * 60 + date.getMinutes();
+
+const computeAttendanceMetrics = (checkInAt: Date, checkOutAt?: Date | null) => {
+  const lateThreshold = LATE_AFTER_HOUR * 60 + LATE_AFTER_MINUTE;
+  const halfDayThreshold = HALF_DAY_AFTER_HOUR * 60 + HALF_DAY_AFTER_MINUTE;
+  const checkInMinute = getMinuteOfDay(checkInAt);
+  const lateMark = checkInMinute > lateThreshold;
+
+  if (!checkOutAt) {
+    return {
+      lateMark,
+      workingHours: null,
+      dayStatus: (lateMark ? 'LATE' : 'PRESENT') as AttendanceDayStatus,
+    };
+  }
+
+  const workedHours = Math.max(0, (checkOutAt.getTime() - checkInAt.getTime()) / (1000 * 60 * 60));
+  const isHalfDay = workedHours < HALF_DAY_MIN_WORKING_HOURS || checkInMinute >= halfDayThreshold;
+
+  return {
+    lateMark,
+    workingHours: Number(workedHours.toFixed(2)),
+    dayStatus: (isHalfDay ? 'HALF_DAY' : lateMark ? 'LATE' : 'PRESENT') as AttendanceDayStatus,
+  };
+};
 
 const resolveMonthlyRange = (month?: number, year?: number) => {
   const now = new Date();
@@ -56,6 +88,11 @@ export const getMyAttendance = async (user: { id: number; role: Role }) => {
     today,
     history,
     isAttendanceRequired: user.role !== 'SUPER_ADMIN',
+    rules: {
+      lateAfter: `${String(LATE_AFTER_HOUR).padStart(2, '0')}:${String(LATE_AFTER_MINUTE).padStart(2, '0')}`,
+      halfDayAfter: `${String(HALF_DAY_AFTER_HOUR).padStart(2, '0')}:${String(HALF_DAY_AFTER_MINUTE).padStart(2, '0')}`,
+      halfDayMinWorkingHours: HALF_DAY_MIN_WORKING_HOURS,
+    },
   };
 };
 
@@ -79,11 +116,17 @@ export const checkIn = async (input: {
     );
   }
 
+  const checkInAt = new Date();
+  const metrics = computeAttendanceMetrics(checkInAt);
+
   return attendanceRepository.createAttendance({
     userId: input.userId,
     attendanceDate,
     workMode: input.workMode,
-    checkInAt: new Date(),
+    dayStatus: metrics.dayStatus,
+    lateMark: metrics.lateMark,
+    workingHours: metrics.workingHours ?? undefined,
+    checkInAt,
     checkInLatitude: input.latitude,
     checkInLongitude: input.longitude,
     checkInIpAddress: input.ipAddress,
@@ -111,8 +154,14 @@ export const checkOut = async (input: {
     throw new AppError(409, 'You have already checked out for today');
   }
 
+  const checkOutAt = new Date();
+  const metrics = computeAttendanceMetrics(existingRecord.checkInAt, checkOutAt);
+
   return attendanceRepository.updateAttendance(existingRecord.id, {
-    checkOutAt: new Date(),
+    checkOutAt,
+    dayStatus: metrics.dayStatus,
+    lateMark: metrics.lateMark,
+    workingHours: metrics.workingHours,
     checkOutLatitude: input.latitude,
     checkOutLongitude: input.longitude,
     checkOutIpAddress: input.ipAddress,
@@ -152,6 +201,9 @@ export const getMonthlyAttendance = async (input: {
       day,
       date: new Date(year, month - 1, day).toISOString(),
       status: record ? 'PRESENT' : 'ABSENT',
+      dayStatus: record?.dayStatus ?? null,
+      lateMark: record?.lateMark ?? false,
+      workingHours: record?.workingHours ?? null,
       workMode: record?.workMode ?? null,
       checkInAt: record?.checkInAt ?? null,
       checkOutAt: record?.checkOutAt ?? null,
@@ -176,6 +228,8 @@ export const getMonthlyAttendance = async (input: {
     },
     summary: {
       presentDays: records.length,
+      lateDays: records.filter((record) => record.dayStatus === 'LATE').length,
+      halfDays: records.filter((record) => record.dayStatus === 'HALF_DAY').length,
       absentDays: days.filter((day) => day.status === 'ABSENT').length,
     },
     days,
@@ -307,17 +361,25 @@ const applyRegularizationToAttendance = async (request: Awaited<ReturnType<typeo
     }
 
     if (existingAttendance) {
+      const metrics = computeAttendanceMetrics(request.requestedCheckInAt, existingAttendance.checkOutAt);
       return attendanceRepository.updateAttendance(existingAttendance.id, {
         checkInAt: request.requestedCheckInAt,
         workMode: request.requestedWorkMode,
+        dayStatus: metrics.dayStatus,
+        lateMark: metrics.lateMark,
+        workingHours: metrics.workingHours,
       });
     }
 
+    const metrics = computeAttendanceMetrics(request.requestedCheckInAt);
     return attendanceRepository.createAttendance({
       userId: request.userId,
       attendanceDate: request.attendanceDate,
       checkInAt: request.requestedCheckInAt,
       workMode: request.requestedWorkMode,
+      dayStatus: metrics.dayStatus,
+      lateMark: metrics.lateMark,
+      workingHours: metrics.workingHours ?? undefined,
     });
   }
 
@@ -326,8 +388,17 @@ const applyRegularizationToAttendance = async (request: Awaited<ReturnType<typeo
       throw new AppError(400, 'Cannot correct check-out because no attendance exists for that date');
     }
 
+    if (!request.requestedCheckOutAt) {
+      throw new AppError(400, 'Regularization request is missing corrected check-out details');
+    }
+
+    const metrics = computeAttendanceMetrics(existingAttendance.checkInAt, request.requestedCheckOutAt);
+
     return attendanceRepository.updateAttendance(existingAttendance.id, {
       checkOutAt: request.requestedCheckOutAt,
+      dayStatus: metrics.dayStatus,
+      lateMark: metrics.lateMark,
+      workingHours: metrics.workingHours,
     });
   }
 
@@ -337,19 +408,27 @@ const applyRegularizationToAttendance = async (request: Awaited<ReturnType<typeo
     }
 
     if (existingAttendance) {
+      const metrics = computeAttendanceMetrics(request.requestedCheckInAt, request.requestedCheckOutAt);
       return attendanceRepository.updateAttendance(existingAttendance.id, {
         checkInAt: request.requestedCheckInAt,
         checkOutAt: request.requestedCheckOutAt,
         workMode: request.requestedWorkMode,
+        dayStatus: metrics.dayStatus,
+        lateMark: metrics.lateMark,
+        workingHours: metrics.workingHours,
       });
     }
 
+    const metrics = computeAttendanceMetrics(request.requestedCheckInAt, request.requestedCheckOutAt);
     return attendanceRepository.createAttendance({
       userId: request.userId,
       attendanceDate: request.attendanceDate,
       checkInAt: request.requestedCheckInAt,
       checkOutAt: request.requestedCheckOutAt,
       workMode: request.requestedWorkMode,
+      dayStatus: metrics.dayStatus,
+      lateMark: metrics.lateMark,
+      workingHours: metrics.workingHours ?? undefined,
     });
   }
 
@@ -361,8 +440,13 @@ const applyRegularizationToAttendance = async (request: Awaited<ReturnType<typeo
     throw new AppError(400, 'Cannot correct work mode because no attendance exists for that date');
   }
 
+  const metrics = computeAttendanceMetrics(existingAttendance.checkInAt, existingAttendance.checkOutAt);
+
   return attendanceRepository.updateAttendance(existingAttendance.id, {
     workMode: request.requestedWorkMode,
+    dayStatus: metrics.dayStatus,
+    lateMark: metrics.lateMark,
+    workingHours: metrics.workingHours,
   });
 };
 

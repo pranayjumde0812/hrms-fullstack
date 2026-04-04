@@ -12,6 +12,9 @@ type WorkMode = 'WFH' | 'OFFICE' | 'OTHER';
 type AttendanceRecord = {
   id: number;
   workMode: WorkMode;
+  dayStatus?: 'PRESENT' | 'LATE' | 'HALF_DAY';
+  lateMark?: boolean;
+  workingHours?: number | null;
   checkInAt: string;
   checkOutAt?: string | null;
 };
@@ -20,6 +23,11 @@ type AttendanceOverview = {
   today: AttendanceRecord | null;
   history: AttendanceRecord[];
   isAttendanceRequired: boolean;
+  rules?: {
+    lateAfter: string;
+    halfDayAfter: string;
+    halfDayMinWorkingHours: number;
+  };
 };
 
 type RegularizationType =
@@ -75,12 +83,17 @@ type MonthlyAttendance = {
   };
   summary: {
     presentDays: number;
+    lateDays: number;
+    halfDays: number;
     absentDays: number;
   };
   days: Array<{
     day: number;
     date: string;
     status: 'PRESENT' | 'ABSENT';
+    dayStatus: 'PRESENT' | 'LATE' | 'HALF_DAY' | null;
+    lateMark: boolean;
+    workingHours: number | null;
     workMode: WorkMode | null;
     checkInAt: string | null;
     checkOutAt: string | null;
@@ -99,6 +112,12 @@ const regularizationTypeLabels: Record<RegularizationType, string> = {
   FULL_CORRECTION: 'Full Correction',
   WORK_MODE_CORRECTION: 'Work Mode Correction',
 };
+
+const attendanceDayStatusLabels = {
+  PRESENT: 'Present',
+  LATE: 'Late',
+  HALF_DAY: 'Half Day',
+} as const;
 
 const formatDateTime = (value?: string | null) => {
   if (!value) {
@@ -312,6 +331,7 @@ export function AttendancePage() {
   const myRegularizations = regularizationsData?.myRequests ?? [];
   const reviewRegularizations = regularizationsData?.reviewRequests ?? [];
   const pendingReviewCount = reviewRegularizations.filter((request) => request.status === 'PENDING').length;
+  const todayStatus = todayAttendance?.dayStatus ?? (isCheckedIn ? 'PRESENT' : undefined);
 
   const handleCheckIn = async () => {
     try {
@@ -498,8 +518,24 @@ export function AttendancePage() {
                 <span className="text-sm font-medium">Duration</span>
               </div>
               <p className="text-lg font-semibold">
-                {todayAttendance ? formatDuration(todayAttendance.checkInAt, todayAttendance.checkOutAt) : '--'}
+                {todayAttendance?.workingHours != null
+                  ? `${todayAttendance.workingHours.toFixed(2)} hrs`
+                  : todayAttendance
+                    ? formatDuration(todayAttendance.checkInAt, todayAttendance.checkOutAt)
+                    : '--'}
               </p>
+            </div>
+            <div className="rounded-xl border p-4">
+              <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+                <Clock3 className="h-4 w-4" />
+                <span className="text-sm font-medium">Attendance Status</span>
+              </div>
+              <p className="text-lg font-semibold">{todayStatus ? attendanceDayStatusLabels[todayStatus] : '--'}</p>
+              {data?.rules && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Late after {data.rules.lateAfter} · Half day after {data.rules.halfDayAfter} or below {data.rules.halfDayMinWorkingHours} hrs
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -536,10 +572,28 @@ export function AttendancePage() {
                       <td className="px-4 py-4">{workModeLabels[record.workMode]}</td>
                       <td className="px-4 py-4">{formatDateTime(record.checkInAt)}</td>
                       <td className="px-4 py-4">{formatDateTime(record.checkOutAt)}</td>
-                      <td className="px-4 py-4">{formatDuration(record.checkInAt, record.checkOutAt)}</td>
                       <td className="px-4 py-4">
-                        <Badge variant={record.checkOutAt ? 'default' : 'success'}>
-                          {record.checkOutAt ? 'Closed' : 'Active'}
+                        {record.workingHours != null
+                          ? `${record.workingHours.toFixed(2)} hrs`
+                          : formatDuration(record.checkInAt, record.checkOutAt)}
+                      </td>
+                      <td className="px-4 py-4">
+                        <Badge
+                          variant={
+                            record.dayStatus === 'HALF_DAY'
+                              ? 'destructive'
+                              : record.dayStatus === 'LATE'
+                                ? 'warning'
+                                : record.checkOutAt
+                                  ? 'default'
+                                  : 'success'
+                          }
+                        >
+                          {record.dayStatus
+                            ? attendanceDayStatusLabels[record.dayStatus]
+                            : record.checkOutAt
+                              ? 'Closed'
+                              : 'Active'}
                         </Badge>
                       </td>
                     </tr>
@@ -762,16 +816,32 @@ export function AttendancePage() {
                       <p className="mt-1 text-2xl font-semibold text-emerald-600">{monthlyAttendance.summary.presentDays}</p>
                     </div>
                     <div className="rounded-xl border bg-white p-4 dark:bg-zinc-950 dark:border-zinc-800">
+                      <p className="text-sm text-muted-foreground">Late Days</p>
+                      <p className="mt-1 text-2xl font-semibold text-amber-600">{monthlyAttendance.summary.lateDays}</p>
+                    </div>
+                    <div className="rounded-xl border bg-white p-4 dark:bg-zinc-950 dark:border-zinc-800">
+                      <p className="text-sm text-muted-foreground">Half Days</p>
+                      <p className="mt-1 text-2xl font-semibold text-red-600">{monthlyAttendance.summary.halfDays}</p>
+                    </div>
+                    <div className="rounded-xl border bg-white p-4 dark:bg-zinc-950 dark:border-zinc-800">
                       <p className="text-sm text-muted-foreground">Absent Days</p>
                       <p className="mt-1 text-2xl font-semibold">{monthlyAttendance.summary.absentDays}</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-sm bg-emerald-500" />
                     Present
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-sm bg-amber-500" />
+                    Late
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-sm bg-red-500" />
+                    Half Day
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-sm bg-zinc-200 dark:bg-zinc-800" />
@@ -785,18 +855,28 @@ export function AttendancePage() {
                       key={day.day}
                       className={`rounded-2xl border p-3 text-center transition-colors ${
                         day.status === 'PRESENT'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
+                          ? day.dayStatus === 'HALF_DAY'
+                            ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300'
+                            : day.dayStatus === 'LATE'
+                              ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300'
+                              : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
                           : 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400'
                       }`}
                       title={
                         day.status === 'PRESENT'
-                          ? `${formatDateTime(day.checkInAt)} • ${day.workMode ? workModeLabels[day.workMode] : ''}`
+                          ? `${day.dayStatus ? attendanceDayStatusLabels[day.dayStatus] : 'Present'} • ${formatDateTime(day.checkInAt)} • ${day.workMode ? workModeLabels[day.workMode] : ''}`
                           : 'Absent'
                       }
                     >
                       <div className="text-xs font-medium">{day.day}</div>
                       <div className="mt-2 text-[10px] uppercase tracking-wider">
-                        {day.status === 'PRESENT' ? 'P' : 'A'}
+                        {day.status === 'PRESENT'
+                          ? day.dayStatus === 'HALF_DAY'
+                            ? 'HD'
+                            : day.dayStatus === 'LATE'
+                              ? 'L'
+                              : 'P'
+                          : 'A'}
                       </div>
                     </div>
                   ))}

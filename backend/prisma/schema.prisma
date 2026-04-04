@@ -42,6 +42,12 @@ enum AttendanceRegularizationStatus {
   REJECTED
 }
 
+enum AttendanceDayStatus {
+  PRESENT
+  LATE
+  HALF_DAY
+}
+
 // ----------------------------------------------------
 // ENTITIES
 // ----------------------------------------------------
@@ -150,6 +156,9 @@ model Attendance {
   userId            Int
   attendanceDate    DateTime
   workMode          WorkMode
+  dayStatus         AttendanceDayStatus @default(PRESENT)
+  lateMark          Boolean   @default(false)
+  workingHours      Float?
   checkInAt         DateTime
   checkOutAt        DateTime?
   checkInLatitude   Float?
