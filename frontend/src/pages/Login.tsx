@@ -35,7 +35,7 @@ export default function Login() {
               <Briefcase className="h-6 w-6 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold tracking-tight">Access NexusHR</CardTitle>
+          <CardTitle className="text-2xl font-bold tracking-tight">Welcome to CodersView</CardTitle>
           <p className="text-sm text-muted-foreground">Sign in to your account to continue</p>
         </CardHeader>
         <CardContent>

@@ -36,7 +36,7 @@ export default function AppLayout() {
         <div className="h-16 flex items-center px-6 border-b">
           <div className="flex items-center gap-2 font-bold text-xl text-primary">
             <Briefcase className="h-6 w-6" />
-            NexusHR
+            CodersView
           </div>
         </div>
         
