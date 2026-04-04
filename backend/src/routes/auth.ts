@@ -17,26 +17,9 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
     
-    // Check if user exists
-    let user = await prisma.user.findUnique({ where: { email } });
-    
-    // Seed an admin if no users exist at all (for easy initial login)
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      const userCount = await prisma.user.count();
-      if (userCount === 0 && email === 'admin@nexushr.com') {
-        user = await prisma.user.create({
-          data: {
-            email,
-            password, // Plain for MVP
-            firstName: 'Super',
-            lastName: 'Admin',
-            role: 'SUPER_ADMIN',
-            joiningDate: new Date(),
-          }
-        });
-      } else {
-        return res.status(401).json({ success: false, message: 'Invalid credentials', data: null });
-      }
+      return res.status(401).json({ success: false, message: 'Invalid credentials', data: null });
     }
 
     if (user.password !== password) {

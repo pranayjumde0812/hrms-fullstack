@@ -8,7 +8,7 @@ router.use(authenticate);
 
 // Generate payroll
 const generatePayrollSchema = z.object({
-  userId: z.string(),
+  userId: z.coerce.number(),
   month: z.number().min(1).max(12),
   year: z.number().min(2000)
 });

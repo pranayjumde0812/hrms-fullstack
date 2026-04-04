@@ -45,15 +45,20 @@ router.post('/', authorize(['SUPER_ADMIN', 'PROJECT_MANAGER']), async (req: Requ
 });
 
 const assignSchema = z.object({
-  userIds: z.array(z.string())
+  userIds: z.array(z.coerce.number())
 });
 
 // Assign users to project
 router.post('/:id/assign', authorize(['SUPER_ADMIN', 'PROJECT_MANAGER']), async (req: Request, res: Response) => {
   try {
+    const projectId = Number(req.params.id);
+    if (Number.isNaN(projectId)) {
+      return res.status(400).json({ success: false, message: 'Invalid project id', data: null });
+    }
+
     const { userIds } = assignSchema.parse(req.body);
     const project = await prisma.project.update({
-      where: { id: req.params.id },
+      where: { id: projectId },
       data: {
         users: {
           connect: userIds.map(id => ({ id }))
@@ -70,9 +75,14 @@ router.post('/:id/assign', authorize(['SUPER_ADMIN', 'PROJECT_MANAGER']), async 
 // Update project
 router.put('/:id', authorize(['SUPER_ADMIN', 'PROJECT_MANAGER']), async (req: Request, res: Response) => {
   try {
+    const projectId = Number(req.params.id);
+    if (Number.isNaN(projectId)) {
+      return res.status(400).json({ success: false, message: 'Invalid project id', data: null });
+    }
+
     const data = projectSchema.parse(req.body);
     const project = await prisma.project.update({
-      where: { id: req.params.id },
+      where: { id: projectId },
       data,
       include: { users: { select: { id: true, firstName: true, lastName: true } } }
     });
@@ -85,7 +95,12 @@ router.put('/:id', authorize(['SUPER_ADMIN', 'PROJECT_MANAGER']), async (req: Re
 // Delete project
 router.delete('/:id', authorize(['SUPER_ADMIN']), async (req: Request, res: Response) => {
   try {
-    await prisma.project.delete({ where: { id: req.params.id } });
+    const projectId = Number(req.params.id);
+    if (Number.isNaN(projectId)) {
+      return res.status(400).json({ success: false, message: 'Invalid project id', data: null });
+    }
+
+    await prisma.project.delete({ where: { id: projectId } });
     res.json({ success: true, message: 'Project deleted', data: null });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error deleting project', data: null });

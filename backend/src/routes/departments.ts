@@ -42,9 +42,14 @@ router.post('/', authorize(['SUPER_ADMIN', 'HR_MANAGER']), async (req: Request, 
 // Update department
 router.put('/:id', authorize(['SUPER_ADMIN', 'HR_MANAGER']), async (req: Request, res: Response) => {
   try {
+    const departmentId = Number(req.params.id);
+    if (Number.isNaN(departmentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid department id', data: null });
+    }
+
     const data = departmentSchema.parse(req.body);
     const department = await prisma.department.update({
-      where: { id: req.params.id },
+      where: { id: departmentId },
       data
     });
     res.json({ success: true, message: 'Department updated', data: department });
@@ -56,7 +61,12 @@ router.put('/:id', authorize(['SUPER_ADMIN', 'HR_MANAGER']), async (req: Request
 // Delete department
 router.delete('/:id', authorize(['SUPER_ADMIN']), async (req: Request, res: Response) => {
   try {
-    await prisma.department.delete({ where: { id: req.params.id } });
+    const departmentId = Number(req.params.id);
+    if (Number.isNaN(departmentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid department id', data: null });
+    }
+
+    await prisma.department.delete({ where: { id: departmentId } });
     res.json({ success: true, message: 'Department deleted', data: null });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error deleting department (may have assigned users)', data: null });

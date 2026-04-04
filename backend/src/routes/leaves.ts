@@ -60,9 +60,14 @@ const approveLeaveSchema = z.object({
 // Approve or reject leave
 router.patch('/:id/status', authorize(['SUPER_ADMIN', 'HR_MANAGER']), async (req: Request, res: Response) => {
   try {
+    const leaveId = Number(req.params.id);
+    if (Number.isNaN(leaveId)) {
+      return res.status(400).json({ success: false, message: 'Invalid leave id', data: null });
+    }
+
     const { status } = approveLeaveSchema.parse(req.body);
     const leave = await prisma.leave.update({
-      where: { id: req.params.id },
+      where: { id: leaveId },
       data: { status }
     });
     res.json({ success: true, message: `Leave ${status.toLowerCase()}`, data: leave });

@@ -10,6 +10,7 @@ import timesheetRoutes from './routes/timesheets';
 import payrollRoutes from './routes/payroll';
 import leaveRoutes from './routes/leaves';
 import dashboardRoutes from './routes/dashboard';
+import { seedSuperAdminIfNeeded } from './utils/seedSuperAdmin';
 
 dotenv.config();
 
@@ -39,6 +40,17 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'NexusHR API is running', data: null });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await seedSuperAdminIfNeeded();
+
+    app.listen(PORT, () => {
+      console.log(`Server is running on http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server', error);
+    process.exit(1);
+  }
+};
+
+startServer();

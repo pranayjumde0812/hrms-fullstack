@@ -23,7 +23,7 @@ export const LeavesView = () => {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string, status: string }) => api.patch(`/leaves/${id}/status`, { status }),
+    mutationFn: ({ id, status }: { id: number, status: string }) => api.patch(`/leaves/${id}/status`, { status }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['leaves'] }); queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }); }
   });
 

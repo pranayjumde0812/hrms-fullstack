@@ -33,7 +33,7 @@ const createUserSchema = z.object({
   baseSalary: z.number().min(0).optional(),
   hourlyRate: z.number().min(0).optional(),
   joiningDate: z.string().transform((str) => new Date(str)),
-  departmentId: z.string().optional()
+  departmentId: z.coerce.number().optional()
 });
 
 // Create user
@@ -64,14 +64,19 @@ router.post('/', authorize(['SUPER_ADMIN', 'HR_MANAGER']), async (req: Request, 
 // Get user profile by id
 router.get('/:id', async (req: Request, res: Response) => {
   try {
+    const userId = Number(req.params.id);
+    if (Number.isNaN(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid user id', data: null });
+    }
+
     // Only HR and admins, or the user themselves can view full profile
     const authedUser = (req as any).user;
-    if (authedUser.id !== req.params.id && !['SUPER_ADMIN', 'HR_MANAGER'].includes(authedUser.role)) {
+    if (authedUser.id !== userId && !['SUPER_ADMIN', 'HR_MANAGER'].includes(authedUser.role)) {
       return res.status(403).json({ success: false, message: 'Access denied', data: null });
     }
     
     const user = await prisma.user.findUnique({
-      where: { id: req.params.id },
+      where: { id: userId },
       include: { department: true }
     });
     
@@ -90,15 +95,20 @@ const updateUserSchema = z.object({
   role: z.enum(['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER', 'EMPLOYEE']).optional(),
   baseSalary: z.number().min(0).optional(),
   hourlyRate: z.number().min(0).optional(),
-  departmentId: z.string().nullable().optional()
+  departmentId: z.coerce.number().nullable().optional()
 });
 
 // Update user
 router.put('/:id', authorize(['SUPER_ADMIN', 'HR_MANAGER']), async (req: Request, res: Response) => {
   try {
+    const userId = Number(req.params.id);
+    if (Number.isNaN(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid user id', data: null });
+    }
+
     const data = updateUserSchema.parse(req.body);
     const user = await prisma.user.update({
-      where: { id: req.params.id },
+      where: { id: userId },
       data
     });
     const { password, ...safeUser } = user;
@@ -114,12 +124,17 @@ router.put('/:id', authorize(['SUPER_ADMIN', 'HR_MANAGER']), async (req: Request
 // Delete user
 router.delete('/:id', authorize(['SUPER_ADMIN']), async (req: Request, res: Response) => {
   try {
+    const userId = Number(req.params.id);
+    if (Number.isNaN(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid user id', data: null });
+    }
+
     // Prevent self-deletion
     const authedUser = (req as any).user;
-    if (authedUser.id === req.params.id) {
+    if (authedUser.id === userId) {
       return res.status(400).json({ success: false, message: 'Cannot delete yourself', data: null });
     }
-    await prisma.user.delete({ where: { id: req.params.id } });
+    await prisma.user.delete({ where: { id: userId } });
     res.json({ success: true, message: 'User deleted', data: null });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error deleting user', data: null });

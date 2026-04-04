@@ -32,7 +32,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 const logTimesheetSchema = z.object({
-  projectId: z.string(),
+  projectId: z.coerce.number(),
   date: z.string().transform(str => new Date(str)),
   hours: z.number().min(0.5).max(24),
   notes: z.string().optional()
@@ -63,9 +63,14 @@ const statusSchema = z.object({
 // Approve/Reject timesheet
 router.patch('/:id/status', authorize(['PROJECT_MANAGER', 'SUPER_ADMIN']), async (req: Request, res: Response) => {
   try {
+    const timesheetId = Number(req.params.id);
+    if (Number.isNaN(timesheetId)) {
+      return res.status(400).json({ success: false, message: 'Invalid timesheet id', data: null });
+    }
+
     const { status } = statusSchema.parse(req.body);
     const timesheet = await prisma.timesheet.update({
-      where: { id: req.params.id },
+      where: { id: timesheetId },
       data: { status }
     });
     res.json({ success: true, message: `Timesheet ${status.toLowerCase()}`, data: timesheet });

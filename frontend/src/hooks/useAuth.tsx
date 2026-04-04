@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
 interface User {
-  id: string;
+  id: number;
   email: string;
   firstName: string;
   lastName: string;

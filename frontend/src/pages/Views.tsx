@@ -74,7 +74,7 @@ export const EmployeesView = () => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/users/${id}`),
+    mutationFn: (id: number) => api.delete(`/users/${id}`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['users'] }); queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }); setDeleteConfirm(null); }
   });
 
@@ -138,7 +138,12 @@ function EmployeeForm({ departments, onSubmit, loading }: { departments: any[], 
   const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', role: 'EMPLOYEE', baseSalary: 0, hourlyRate: 0, joiningDate: new Date().toISOString().split('T')[0], departmentId: '' });
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...form, baseSalary: Number(form.baseSalary), hourlyRate: Number(form.hourlyRate), departmentId: form.departmentId || undefined });
+    onSubmit({
+      ...form,
+      baseSalary: Number(form.baseSalary),
+      hourlyRate: Number(form.hourlyRate),
+      departmentId: form.departmentId ? Number(form.departmentId) : undefined
+    });
   };
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -182,7 +187,12 @@ function EmployeeEditForm({ user, departments, onSubmit, loading }: { user: any,
   const [form, setForm] = useState({ firstName: user.firstName, lastName: user.lastName, role: user.role, baseSalary: user.baseSalary || 0, hourlyRate: user.hourlyRate || 0, departmentId: user.departmentId || '' });
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...form, baseSalary: Number(form.baseSalary), hourlyRate: Number(form.hourlyRate), departmentId: form.departmentId || null });
+    onSubmit({
+      ...form,
+      baseSalary: Number(form.baseSalary),
+      hourlyRate: Number(form.hourlyRate),
+      departmentId: form.departmentId ? Number(form.departmentId) : null
+    });
   };
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -238,12 +248,12 @@ export const ProjectsView = () => {
   });
 
   const assignMutation = useMutation({
-    mutationFn: ({ id, userIds }: { id: string, userIds: string[] }) => api.post(`/projects/${id}/assign`, { userIds }),
+    mutationFn: ({ id, userIds }: { id: number, userIds: number[] }) => api.post(`/projects/${id}/assign`, { userIds }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['projects'] }); setAssignProject(null); }
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/projects/${id}`),
+    mutationFn: (id: number) => api.delete(`/projects/${id}`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['projects'] }); queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }); setDeleteConfirm(null); }
   });
 
@@ -280,7 +290,7 @@ export const ProjectsView = () => {
       </Modal>
 
       <Modal isOpen={!!assignProject} onClose={() => setAssignProject(null)} title={`Assign Members to "${assignProject?.name}"`}>
-        {assignProject && <AssignMembersForm project={assignProject} allUsers={allUsers || []} onSubmit={(userIds: string[]) => assignMutation.mutate({ id: assignProject.id, userIds })} loading={assignMutation.isPending} />}
+        {assignProject && <AssignMembersForm project={assignProject} allUsers={allUsers || []} onSubmit={(userIds: number[]) => assignMutation.mutate({ id: assignProject.id, userIds })} loading={assignMutation.isPending} />}
       </Modal>
 
       <Modal isOpen={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="Delete Project" size="sm">
@@ -317,13 +327,13 @@ function ProjectForm({ onSubmit, loading }: { onSubmit: (data: any) => void, loa
   );
 }
 
-function AssignMembersForm({ project, allUsers, onSubmit, loading }: { project: any, allUsers: any[], onSubmit: (ids: string[]) => void, loading: boolean }) {
+function AssignMembersForm({ project, allUsers, onSubmit, loading }: { project: any, allUsers: any[], onSubmit: (ids: number[]) => void, loading: boolean }) {
   const existingIds = new Set((project.users || []).map((u: any) => u.id));
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<number[]>([]);
 
   const availableUsers = allUsers.filter((u: any) => !existingIds.has(u.id));
 
-  const toggle = (id: string) => {
+  const toggle = (id: number) => {
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
@@ -377,7 +387,7 @@ export const TimesheetsView = () => {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string, status: string }) => api.patch(`/timesheets/${id}/status`, { status }),
+    mutationFn: ({ id, status }: { id: number, status: string }) => api.patch(`/timesheets/${id}/status`, { status }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['timesheets'] }); queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }); }
   });
 
@@ -425,7 +435,7 @@ function TimesheetForm({ projects, onSubmit, loading }: { projects: any[], onSub
   const [form, setForm] = useState({ projectId: '', date: new Date().toISOString().split('T')[0], hours: 8, notes: '' });
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...form, hours: Number(form.hours), notes: form.notes || undefined });
+    onSubmit({ ...form, projectId: Number(form.projectId), hours: Number(form.hours), notes: form.notes || undefined });
   };
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -503,7 +513,7 @@ function PayrollForm({ users, onSubmit, loading }: { users: any[], onSubmit: (da
   const [form, setForm] = useState({ userId: '', month: now.getMonth() + 1, year: now.getFullYear() });
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...form, month: Number(form.month), year: Number(form.year) });
+    onSubmit({ ...form, userId: Number(form.userId), month: Number(form.month), year: Number(form.year) });
   };
   return (
     <form onSubmit={handleSubmit} className="space-y-4">

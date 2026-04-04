@@ -30,7 +30,7 @@ export const DepartmentsView = () => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/departments/${id}`),
+    mutationFn: (id: number) => api.delete(`/departments/${id}`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['departments'] }); queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }); setDeleteConfirm(null); }
   });
 
