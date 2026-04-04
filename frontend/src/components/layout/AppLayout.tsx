@@ -1,15 +1,17 @@
-import React from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Outlet, NavLink } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 import { 
   Building2, Users, LayoutDashboard, Clock, DollarSign, 
-  LogOut, Settings, Briefcase, Calendar
+  LogOut, Briefcase, Calendar, Sun, Moon, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   if (!user) return null;
 
@@ -31,52 +33,106 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
-      {/* Sidebar */}
-      <aside className="w-64 border-r bg-white dark:bg-zinc-900 flex flex-col">
-        <div className="h-16 flex items-center px-6 border-b">
-          <div className="flex items-center gap-2 font-bold text-xl text-primary">
+      <aside
+        className={cn(
+          'border-r bg-white dark:bg-zinc-900 flex flex-col overflow-x-hidden transition-[width] duration-300 ease-in-out',
+          isSidebarCollapsed ? 'w-20' : 'w-64',
+        )}
+      >
+        <div
+          className={cn(
+            'h-16 flex items-center border-b',
+            isSidebarCollapsed ? 'justify-center px-3' : 'justify-between px-6',
+          )}
+        >
+          <div className={cn('flex items-center text-primary', isSidebarCollapsed ? 'justify-center' : 'gap-2 font-bold text-xl')}>
             <Briefcase className="h-6 w-6" />
-            CodersView
+            {!isSidebarCollapsed && 'CodersView'}
           </div>
+          {!isSidebarCollapsed && (
+            <button
+              onClick={() => setIsSidebarCollapsed(true)}
+              className="h-9 w-9 rounded-md border flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+              aria-label="Collapse sidebar"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          )}
         </div>
-        
-        <div className="p-4 flex-1 overflow-y-auto">
-          <p className="px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Main Menu</p>
+
+        <div className={cn('flex-1 overflow-y-auto overflow-x-hidden', isSidebarCollapsed ? 'px-2 py-4' : 'p-4')}>
+          <div className={cn('mb-3', isSidebarCollapsed ? 'flex justify-center' : 'px-2')}>
+            {isSidebarCollapsed ? (
+              <button
+                onClick={() => setIsSidebarCollapsed(false)}
+                className="h-10 w-10 rounded-md border flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+                aria-label="Expand sidebar"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+            ) : (
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Main Menu</p>
+            )}
+          </div>
           <nav className="space-y-1">
             {allowedMenu.map((item) => (
               <NavLink
                 key={item.name}
                 to={item.path}
-                className={({ isActive }) => cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-                  isActive 
-                    ? "bg-primary/10 text-primary" 
-                    : "text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground"
-                )}
+                className={({ isActive }) =>
+                  cn(
+                    'group relative flex items-center rounded-md text-sm font-medium transition-colors',
+                    isSidebarCollapsed ? 'justify-center px-0 py-3' : 'gap-3 px-3 py-2.5',
+                    isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-foreground',
+                  )
+                }
+                title={isSidebarCollapsed ? item.name : undefined}
               >
                 <item.icon className="h-4 w-4" />
-                {item.name}
+                {!isSidebarCollapsed && item.name}
+                {isSidebarCollapsed && (
+                  <span className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 -translate-y-1/2 rounded-md bg-zinc-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100 dark:bg-zinc-100 dark:text-zinc-900">
+                    {item.name}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
         </div>
 
-        <div className="p-4 border-t">
-          <div className="flex items-center gap-3 px-3 py-3 rounded-md bg-zinc-50 dark:bg-zinc-800 border mb-2">
+        <div className={cn('border-t', isSidebarCollapsed ? 'p-2' : 'p-4')}>
+          <div
+            className={cn(
+              'rounded-md bg-zinc-50 dark:bg-zinc-800 border mb-2',
+              isSidebarCollapsed ? 'flex justify-center px-0 py-3' : 'flex items-center gap-3 px-3 py-3',
+            )}
+            title={isSidebarCollapsed ? `${user.firstName} ${user.lastName}` : undefined}
+          >
             <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex flex-shrink-0 items-center justify-center font-bold text-xs uppercase">
               {user.firstName[0]}{user.lastName[0]}
             </div>
-            <div className="overflow-hidden flex-1">
-              <p className="text-sm font-semibold truncate">{user.firstName} {user.lastName}</p>
-              <p className="text-xs text-muted-foreground truncate">{user.role.replace('_', ' ')}</p>
-            </div>
+            {!isSidebarCollapsed && (
+              <div className="overflow-hidden flex-1">
+                <p className="text-sm font-semibold truncate">{user.firstName} {user.lastName}</p>
+                <p className="text-xs text-muted-foreground truncate">{user.role.replace('_', ' ')}</p>
+              </div>
+            )}
           </div>
           <button 
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+            className={cn(
+              'group relative flex w-full rounded-md text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors',
+              isSidebarCollapsed ? 'justify-center px-0 py-3' : 'items-center gap-3 px-3 py-2.5',
+            )}
+            title={isSidebarCollapsed ? 'Sign Out' : undefined}
           >
             <LogOut className="h-4 w-4" />
-            Sign Out
+            {!isSidebarCollapsed && 'Sign Out'}
+            {isSidebarCollapsed && (
+              <span className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 -translate-y-1/2 rounded-md bg-zinc-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100 dark:bg-zinc-100 dark:text-zinc-900">
+                Sign Out
+              </span>
+            )}
           </button>
         </div>
       </aside>
@@ -86,8 +142,14 @@ export default function AppLayout() {
         <header className="h-16 border-b bg-white/50 backdrop-blur-sm dark:bg-zinc-900/50 flex flex-shrink-0 items-center justify-between px-8">
           <h1 className="text-lg font-semibold text-foreground tracking-tight ">{/* dynamic title could go here */} Overview</h1>
           <div className="flex items-center gap-4">
-             <button className="h-8 w-8 rounded-md border flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors">
-               <Settings className="h-4 w-4" />
+             <button
+               onClick={toggleTheme}
+               className="inline-flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-muted text-muted-foreground transition-colors"
+               aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+               title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+             >
+               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+               <span className="text-sm font-medium text-foreground">{theme === 'dark' ? 'Light' : 'Dark'}</span>
              </button>
           </div>
         </header>
