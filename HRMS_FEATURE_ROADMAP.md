@@ -14,7 +14,7 @@ Status guide:
 - `[x]` Work mode selection: `WFH`, `Office`, `Other`
 - `[x]` Monthly attendance drawer with month-wise blocks
 - `[x]` Super Admin attendance exemption
-- `[ ]` Attendance regularization request
+- `[x]` Attendance regularization request
 - `[ ]` Late mark and half-day calculation
 - `[ ]` Overtime tracking and approval
 - `[ ]` Attendance remarks and manual HR correction

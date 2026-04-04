@@ -29,6 +29,19 @@ enum WorkMode {
   OTHER
 }
 
+enum AttendanceRegularizationType {
+  MISSED_CHECK_IN
+  MISSED_CHECK_OUT
+  FULL_CORRECTION
+  WORK_MODE_CORRECTION
+}
+
+enum AttendanceRegularizationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ----------------------------------------------------
 // ENTITIES
 // ----------------------------------------------------
@@ -51,6 +64,8 @@ model User {
   projects       Project[]   @relation("UserProjects")
   timesheets     Timesheet[]
   attendances    Attendance[]
+  attendanceRegularizations AttendanceRegularization[] @relation("AttendanceRegularizationRequester")
+  reviewedAttendanceRegularizations AttendanceRegularization[] @relation("AttendanceRegularizationReviewer")
   loginActivities LoginActivity[]
   payrolls       Payroll[]
   leaves         Leave[]
@@ -169,4 +184,28 @@ model LoginActivity {
   createdAt     DateTime @default(now())
 
   @@index([userId, loggedInAt])
+}
+
+model AttendanceRegularization {
+  id                   Int                            @id @default(autoincrement())
+  userId               Int
+  attendanceDate       DateTime
+  type                 AttendanceRegularizationType
+  status               AttendanceRegularizationStatus @default(PENDING)
+  reason               String
+  requestedCheckInAt   DateTime?
+  requestedCheckOutAt  DateTime?
+  requestedWorkMode    WorkMode?
+  reviewerId           Int?
+  reviewNotes          String?
+  reviewedAt           DateTime?
+
+  user                 User                           @relation("AttendanceRegularizationRequester", fields: [userId], references: [id])
+  reviewer             User?                          @relation("AttendanceRegularizationReviewer", fields: [reviewerId], references: [id])
+
+  createdAt            DateTime                       @default(now())
+  updatedAt            DateTime                       @updatedAt
+
+  @@index([userId, attendanceDate])
+  @@index([status, attendanceDate])
 }

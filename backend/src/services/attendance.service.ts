@@ -1,5 +1,10 @@
-import { Role, WorkMode } from '@prisma/client';
-import { attendanceRepository, usersRepository } from '../repositories';
+import {
+  AttendanceRegularizationStatus,
+  AttendanceRegularizationType,
+  Role,
+  WorkMode,
+} from '@prisma/client';
+import { attendanceRegularizationRepository, attendanceRepository, usersRepository } from '../repositories';
 import { AppError } from '../utils/http';
 
 const getStartOfToday = () => {
@@ -16,6 +21,14 @@ const ensureAttendanceRequired = (role: Role) => {
 };
 
 const canReviewOtherUsersAttendance = (role: Role) => ATTENDANCE_REVIEW_ROLES.includes(role);
+const canElevatedReviewRegularization = (role: Role) => ['SUPER_ADMIN', 'HR_MANAGER'].includes(role);
+
+const getAttendanceDateFromString = (value: string) => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const combineDateAndTime = (dateString: string, timeString: string) => new Date(`${dateString}T${timeString}:00`);
 
 const resolveMonthlyRange = (month?: number, year?: number) => {
   const now = new Date();
@@ -193,4 +206,197 @@ export const listAttendanceViewableUsers = async (requester: { id: number; role:
     lastName: user.lastName,
     role: user.role,
   }));
+};
+
+const validateRegularizationPayload = (input: {
+  type: AttendanceRegularizationType;
+  requestedCheckInTime?: string;
+  requestedCheckOutTime?: string;
+  requestedWorkMode?: WorkMode;
+}) => {
+  if (input.type === 'MISSED_CHECK_IN') {
+    if (!input.requestedCheckInTime || !input.requestedWorkMode) {
+      throw new AppError(400, 'Missed check-in requires corrected check-in time and work mode');
+    }
+  }
+
+  if (input.type === 'MISSED_CHECK_OUT') {
+    if (!input.requestedCheckOutTime) {
+      throw new AppError(400, 'Missed check-out requires corrected check-out time');
+    }
+  }
+
+  if (input.type === 'FULL_CORRECTION') {
+    if (!input.requestedCheckInTime || !input.requestedCheckOutTime || !input.requestedWorkMode) {
+      throw new AppError(400, 'Full correction requires check-in time, check-out time, and work mode');
+    }
+  }
+
+  if (input.type === 'WORK_MODE_CORRECTION') {
+    if (!input.requestedWorkMode) {
+      throw new AppError(400, 'Work mode correction requires a work mode');
+    }
+  }
+};
+
+export const getRegularizations = async (requester: { id: number; role: Role }) => {
+  const [myRequests, reviewRequests] = await Promise.all([
+    attendanceRegularizationRepository.listRegularizationsForUser(requester.id),
+    ATTENDANCE_REVIEW_ROLES.includes(requester.role)
+      ? attendanceRegularizationRepository.listRegularizationsForReview(
+          requester.id,
+          canElevatedReviewRegularization(requester.role),
+        )
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    myRequests,
+    reviewRequests,
+  };
+};
+
+export const createRegularization = async (input: {
+  userId: number;
+  role: Role;
+  attendanceDate: string;
+  type: AttendanceRegularizationType;
+  reason: string;
+  requestedCheckInTime?: string;
+  requestedCheckOutTime?: string;
+  requestedWorkMode?: WorkMode;
+}) => {
+  ensureAttendanceRequired(input.role);
+  validateRegularizationPayload(input);
+
+  const attendanceDate = getAttendanceDateFromString(input.attendanceDate);
+  const pendingRequest = await attendanceRegularizationRepository.findPendingRegularizationForDate(
+    input.userId,
+    attendanceDate,
+  );
+
+  if (pendingRequest) {
+    throw new AppError(409, 'A pending regularization request already exists for this date');
+  }
+
+  return attendanceRegularizationRepository.createRegularization({
+    userId: input.userId,
+    attendanceDate,
+    type: input.type,
+    reason: input.reason,
+    requestedCheckInAt: input.requestedCheckInTime
+      ? combineDateAndTime(input.attendanceDate, input.requestedCheckInTime)
+      : undefined,
+    requestedCheckOutAt: input.requestedCheckOutTime
+      ? combineDateAndTime(input.attendanceDate, input.requestedCheckOutTime)
+      : undefined,
+    requestedWorkMode: input.requestedWorkMode,
+  });
+};
+
+const applyRegularizationToAttendance = async (request: Awaited<ReturnType<typeof attendanceRegularizationRepository.findRegularizationById>>) => {
+  if (!request) {
+    throw new AppError(404, 'Regularization request not found');
+  }
+
+  const existingAttendance = await attendanceRepository.findAttendanceForDate(request.userId, request.attendanceDate);
+
+  if (request.type === 'MISSED_CHECK_IN') {
+    if (!request.requestedCheckInAt || !request.requestedWorkMode) {
+      throw new AppError(400, 'Regularization request is missing corrected check-in details');
+    }
+
+    if (existingAttendance) {
+      return attendanceRepository.updateAttendance(existingAttendance.id, {
+        checkInAt: request.requestedCheckInAt,
+        workMode: request.requestedWorkMode,
+      });
+    }
+
+    return attendanceRepository.createAttendance({
+      userId: request.userId,
+      attendanceDate: request.attendanceDate,
+      checkInAt: request.requestedCheckInAt,
+      workMode: request.requestedWorkMode,
+    });
+  }
+
+  if (request.type === 'MISSED_CHECK_OUT') {
+    if (!existingAttendance) {
+      throw new AppError(400, 'Cannot correct check-out because no attendance exists for that date');
+    }
+
+    return attendanceRepository.updateAttendance(existingAttendance.id, {
+      checkOutAt: request.requestedCheckOutAt,
+    });
+  }
+
+  if (request.type === 'FULL_CORRECTION') {
+    if (!request.requestedCheckInAt || !request.requestedCheckOutAt || !request.requestedWorkMode) {
+      throw new AppError(400, 'Regularization request is missing full correction details');
+    }
+
+    if (existingAttendance) {
+      return attendanceRepository.updateAttendance(existingAttendance.id, {
+        checkInAt: request.requestedCheckInAt,
+        checkOutAt: request.requestedCheckOutAt,
+        workMode: request.requestedWorkMode,
+      });
+    }
+
+    return attendanceRepository.createAttendance({
+      userId: request.userId,
+      attendanceDate: request.attendanceDate,
+      checkInAt: request.requestedCheckInAt,
+      checkOutAt: request.requestedCheckOutAt,
+      workMode: request.requestedWorkMode,
+    });
+  }
+
+  if (!request.requestedWorkMode) {
+    throw new AppError(400, 'Regularization request is missing corrected work mode');
+  }
+
+  if (!existingAttendance) {
+    throw new AppError(400, 'Cannot correct work mode because no attendance exists for that date');
+  }
+
+  return attendanceRepository.updateAttendance(existingAttendance.id, {
+    workMode: request.requestedWorkMode,
+  });
+};
+
+export const reviewRegularization = async (input: {
+  requestId: number;
+  reviewer: { id: number; role: Role };
+  status: AttendanceRegularizationStatus;
+  reviewNotes?: string;
+}) => {
+  const request = await attendanceRegularizationRepository.findRegularizationById(input.requestId);
+
+  if (!request) {
+    throw new AppError(404, 'Regularization request not found');
+  }
+
+  if (request.status !== 'PENDING') {
+    throw new AppError(409, 'This regularization request has already been reviewed');
+  }
+
+  const isElevatedReviewer = canElevatedReviewRegularization(input.reviewer.role);
+  const isReportingManager = request.user.managerId === input.reviewer.id;
+
+  if (!isElevatedReviewer && !isReportingManager) {
+    throw new AppError(403, 'You are not allowed to review this regularization request');
+  }
+
+  if (input.status === 'APPROVED') {
+    await applyRegularizationToAttendance(request);
+  }
+
+  return attendanceRegularizationRepository.updateRegularization(request.id, {
+    status: input.status,
+    reviewerId: input.reviewer.id,
+    reviewNotes: input.reviewNotes,
+    reviewedAt: new Date(),
+  });
 };

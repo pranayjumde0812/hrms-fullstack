@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Label, Select } from '@/components/ui/components';
+import { Modal } from '@/components/ui/Modal';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Label, Select, Textarea } from '@/components/ui/components';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { getSilentLocation } from '@/shared/location/getSilentLocation';
-import { Building2, CalendarDays, ChevronRight, Clock3, LogIn, LogOut, TimerReset, X } from 'lucide-react';
+import { Building2, CalendarDays, ChevronRight, Clock3, FileEdit, LogIn, LogOut, TimerReset, X } from 'lucide-react';
 
 type WorkMode = 'WFH' | 'OFFICE' | 'OTHER';
 
@@ -19,6 +20,40 @@ type AttendanceOverview = {
   today: AttendanceRecord | null;
   history: AttendanceRecord[];
   isAttendanceRequired: boolean;
+};
+
+type RegularizationType =
+  | 'MISSED_CHECK_IN'
+  | 'MISSED_CHECK_OUT'
+  | 'FULL_CORRECTION'
+  | 'WORK_MODE_CORRECTION';
+
+type RegularizationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+type AttendanceRegularization = {
+  id: number;
+  attendanceDate: string;
+  type: RegularizationType;
+  status: RegularizationStatus;
+  reason: string;
+  requestedCheckInAt?: string | null;
+  requestedCheckOutAt?: string | null;
+  requestedWorkMode?: WorkMode | null;
+  reviewNotes?: string | null;
+  reviewedAt?: string | null;
+  user: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    role: AttendanceUser['role'];
+    managerId?: number | null;
+  };
+  reviewer?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    role: AttendanceUser['role'];
+  } | null;
 };
 
 type AttendanceUser = {
@@ -56,6 +91,13 @@ const workModeLabels: Record<WorkMode, string> = {
   WFH: 'WFH',
   OFFICE: 'Office',
   OTHER: 'Other',
+};
+
+const regularizationTypeLabels: Record<RegularizationType, string> = {
+  MISSED_CHECK_IN: 'Missed Check-In',
+  MISSED_CHECK_OUT: 'Missed Check-Out',
+  FULL_CORRECTION: 'Full Correction',
+  WORK_MODE_CORRECTION: 'Work Mode Correction',
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -99,9 +141,20 @@ export function AttendancePage() {
   const [selectedMode, setSelectedMode] = useState<WorkMode>('OFFICE');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isRegularizationModalOpen, setIsRegularizationModalOpen] = useState(false);
+  const [reviewingRequest, setReviewingRequest] = useState<AttendanceRegularization | null>(null);
   const [selectedMonthNumber, setSelectedMonthNumber] = useState(() => new Date().getMonth() + 1);
   const [selectedYearNumber, setSelectedYearNumber] = useState(() => new Date().getFullYear());
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [regularizationForm, setRegularizationForm] = useState({
+    attendanceDate: new Date().toISOString().split('T')[0],
+    type: 'MISSED_CHECK_IN' as RegularizationType,
+    requestedCheckInTime: '',
+    requestedCheckOutTime: '',
+    requestedWorkMode: 'OFFICE' as WorkMode,
+    reason: '',
+  });
 
   const canReviewOtherAttendance = user ? ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER'].includes(user.role) : false;
 
@@ -118,6 +171,21 @@ export function AttendancePage() {
   const { data: attendanceUsers = [] } = useQuery({
     queryKey: ['attendance-viewable-users'],
     queryFn: () => api.get('/attendance/viewable-users').then((res: any) => res.data as AttendanceUser[]),
+    enabled: !!user,
+  });
+
+  const { data: regularizationsData, isLoading: isRegularizationLoading } = useQuery({
+    queryKey: ['attendance-regularizations'],
+    queryFn: () =>
+      api
+        .get('/attendance/regularizations')
+        .then(
+          (res: any) =>
+            res.data as {
+              myRequests: AttendanceRegularization[];
+              reviewRequests: AttendanceRegularization[];
+            },
+        ),
     enabled: !!user,
   });
 
@@ -161,7 +229,11 @@ export function AttendancePage() {
   });
 
   const refreshAttendance = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['attendance'] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['attendance'] }),
+      queryClient.invalidateQueries({ queryKey: ['attendance-regularizations'] }),
+      queryClient.invalidateQueries({ queryKey: ['attendance-monthly'] }),
+    ]);
   };
 
   const checkInMutation = useMutation({
@@ -187,6 +259,42 @@ export function AttendancePage() {
     },
   });
 
+  const regularizationMutation = useMutation({
+    mutationFn: async () =>
+      api.post('/attendance/regularizations', {
+        ...regularizationForm,
+        requestedCheckInTime: regularizationForm.requestedCheckInTime || undefined,
+        requestedCheckOutTime: regularizationForm.requestedCheckOutTime || undefined,
+        requestedWorkMode:
+          regularizationForm.type === 'MISSED_CHECK_OUT' ? undefined : regularizationForm.requestedWorkMode,
+      }),
+    onSuccess: async () => {
+      await refreshAttendance();
+      setIsRegularizationModalOpen(false);
+      setRegularizationForm({
+        attendanceDate: new Date().toISOString().split('T')[0],
+        type: 'MISSED_CHECK_IN',
+        requestedCheckInTime: '',
+        requestedCheckOutTime: '',
+        requestedWorkMode: 'OFFICE',
+        reason: '',
+      });
+    },
+  });
+
+  const reviewRegularizationMutation = useMutation({
+    mutationFn: async (status: RegularizationStatus) =>
+      api.patch(`/attendance/regularizations/${reviewingRequest!.id}`, {
+        status,
+        reviewNotes: reviewNotes || undefined,
+      }),
+    onSuccess: async () => {
+      await refreshAttendance();
+      setReviewingRequest(null);
+      setReviewNotes('');
+    },
+  });
+
   useEffect(() => {
     if (user && selectedUserId == null && attendanceUsers.length > 0) {
       setSelectedUserId(canReviewOtherAttendance ? user.id : attendanceUsers[0].id);
@@ -201,6 +309,9 @@ export function AttendancePage() {
   const canCheckIn = isAttendanceRequired && !todayAttendance;
   const canCheckOut = isAttendanceRequired && !!todayAttendance && !todayAttendance.checkOutAt;
   const monthLabel = selectedMonthDate.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  const myRegularizations = regularizationsData?.myRequests ?? [];
+  const reviewRegularizations = regularizationsData?.reviewRequests ?? [];
+  const pendingReviewCount = reviewRegularizations.filter((request) => request.status === 'PENDING').length;
 
   const handleCheckIn = async () => {
     try {
@@ -222,6 +333,26 @@ export function AttendancePage() {
     }
   };
 
+  const handleSubmitRegularization = async () => {
+    try {
+      await regularizationMutation.mutateAsync();
+      setFeedback({ type: 'success', message: 'Attendance regularization request submitted.' });
+    } catch (error) {
+      const message = (error as any)?.response?.data?.message || 'Unable to submit regularization request.';
+      setFeedback({ type: 'error', message });
+    }
+  };
+
+  const handleReviewRegularization = async (status: RegularizationStatus) => {
+    try {
+      await reviewRegularizationMutation.mutateAsync(status);
+      setFeedback({ type: 'success', message: `Regularization request ${status.toLowerCase()}.` });
+    } catch (error) {
+      const message = (error as any)?.response?.data?.message || 'Unable to review regularization request.';
+      setFeedback({ type: 'error', message });
+    }
+  };
+
   if (isLoading) {
     return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading attendance...</div>;
   }
@@ -239,6 +370,15 @@ export function AttendancePage() {
           View Monthly Attendance
           <ChevronRight className="h-4 w-4" />
         </Button>
+        {isAttendanceRequired && (
+          <Button variant="outline" onClick={() => setIsRegularizationModalOpen(true)} className="gap-2">
+            <FileEdit className="h-4 w-4" />
+            Request Regularization
+          </Button>
+        )}
+        {canReviewOtherAttendance && pendingReviewCount > 0 && (
+          <Badge variant="warning">{pendingReviewCount} pending regularization review{pendingReviewCount > 1 ? 's' : ''}</Badge>
+        )}
         {!isAttendanceRequired && (
           <Badge variant="warning">Super Admin is exempt from daily check-in</Badge>
         )}
@@ -411,6 +551,118 @@ export function AttendancePage() {
         </CardContent>
       </Card>
 
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-2xl">My regularization requests</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isRegularizationLoading ? (
+              <div className="py-8 text-sm text-muted-foreground">Loading requests...</div>
+            ) : myRegularizations.length === 0 ? (
+              <div className="py-8 text-sm text-muted-foreground">No regularization requests submitted yet.</div>
+            ) : (
+              <div className="space-y-3">
+                {myRegularizations.map((request) => (
+                  <div key={request.id} className="rounded-xl border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{regularizationTypeLabels[request.type]}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(request.attendanceDate).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          request.status === 'APPROVED'
+                            ? 'success'
+                            : request.status === 'REJECTED'
+                              ? 'destructive'
+                              : 'warning'
+                        }
+                      >
+                        {request.status}
+                      </Badge>
+                    </div>
+                    <p className="mt-3 text-sm text-muted-foreground">{request.reason}</p>
+                    <div className="mt-3 text-xs text-muted-foreground">
+                      Requested:
+                      {' '}
+                      {request.requestedCheckInAt ? `IN ${formatTime(request.requestedCheckInAt)} ` : ''}
+                      {request.requestedCheckOutAt ? `OUT ${formatTime(request.requestedCheckOutAt)} ` : ''}
+                      {request.requestedWorkMode ? workModeLabels[request.requestedWorkMode] : ''}
+                    </div>
+                    {request.reviewNotes && (
+                      <p className="mt-2 text-xs text-muted-foreground">Review note: {request.reviewNotes}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {canReviewOtherAttendance && (
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-2xl">Regularization review</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isRegularizationLoading ? (
+                <div className="py-8 text-sm text-muted-foreground">Loading review queue...</div>
+              ) : reviewRegularizations.length === 0 ? (
+                <div className="py-8 text-sm text-muted-foreground">No regularization requests available for review.</div>
+              ) : (
+                <div className="space-y-3">
+                  {reviewRegularizations.map((request) => (
+                    <div key={request.id} className="rounded-xl border p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium">
+                            {request.user.firstName} {request.user.lastName}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {regularizationTypeLabels[request.type]} • {new Date(request.attendanceDate).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={
+                            request.status === 'APPROVED'
+                              ? 'success'
+                              : request.status === 'REJECTED'
+                                ? 'destructive'
+                                : 'warning'
+                          }
+                        >
+                          {request.status}
+                        </Badge>
+                      </div>
+                      <p className="mt-3 text-sm text-muted-foreground">{request.reason}</p>
+                      <div className="mt-3 text-xs text-muted-foreground">
+                        Requested:
+                        {' '}
+                        {request.requestedCheckInAt ? `IN ${formatTime(request.requestedCheckInAt)} ` : ''}
+                        {request.requestedCheckOutAt ? `OUT ${formatTime(request.requestedCheckOutAt)} ` : ''}
+                        {request.requestedWorkMode ? workModeLabels[request.requestedWorkMode] : ''}
+                      </div>
+                      {request.status === 'PENDING' ? (
+                        <div className="mt-4 flex gap-2">
+                          <Button variant="outline" onClick={() => setReviewingRequest(request)}>Review</Button>
+                        </div>
+                      ) : request.reviewer ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Reviewed by {request.reviewer.firstName} {request.reviewer.lastName}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
       <div
         className={`fixed inset-0 z-50 transition ${isDrawerOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
         aria-hidden={!isDrawerOpen}
@@ -556,6 +808,161 @@ export function AttendancePage() {
           </div>
         </aside>
       </div>
+
+      <Modal isOpen={isRegularizationModalOpen} onClose={() => setIsRegularizationModalOpen(false)} title="Request Attendance Regularization">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="regularization-date">Attendance Date</Label>
+              <input
+                id="regularization-date"
+                type="date"
+                value={regularizationForm.attendanceDate}
+                onChange={(event) => setRegularizationForm((current) => ({ ...current, attendanceDate: event.target.value }))}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="regularization-type">Request Type</Label>
+              <Select
+                id="regularization-type"
+                value={regularizationForm.type}
+                onChange={(event) =>
+                  setRegularizationForm((current) => ({
+                    ...current,
+                    type: event.target.value as RegularizationType,
+                  }))
+                }
+              >
+                {Object.entries(regularizationTypeLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
+          {(regularizationForm.type === 'MISSED_CHECK_IN' || regularizationForm.type === 'FULL_CORRECTION') && (
+            <div className="space-y-2">
+              <Label htmlFor="requested-check-in">Corrected Check-In Time</Label>
+              <input
+                id="requested-check-in"
+                type="time"
+                value={regularizationForm.requestedCheckInTime}
+                onChange={(event) =>
+                  setRegularizationForm((current) => ({ ...current, requestedCheckInTime: event.target.value }))
+                }
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+
+          {(regularizationForm.type === 'MISSED_CHECK_OUT' || regularizationForm.type === 'FULL_CORRECTION') && (
+            <div className="space-y-2">
+              <Label htmlFor="requested-check-out">Corrected Check-Out Time</Label>
+              <input
+                id="requested-check-out"
+                type="time"
+                value={regularizationForm.requestedCheckOutTime}
+                onChange={(event) =>
+                  setRegularizationForm((current) => ({ ...current, requestedCheckOutTime: event.target.value }))
+                }
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+
+          {regularizationForm.type !== 'MISSED_CHECK_OUT' && (
+            <div className="space-y-2">
+              <Label htmlFor="requested-work-mode">Corrected Work Mode</Label>
+              <Select
+                id="requested-work-mode"
+                value={regularizationForm.requestedWorkMode}
+                onChange={(event) =>
+                  setRegularizationForm((current) => ({ ...current, requestedWorkMode: event.target.value as WorkMode }))
+                }
+              >
+                <option value="WFH">WFH</option>
+                <option value="OFFICE">Office</option>
+                <option value="OTHER">Other</option>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="regularization-reason">Reason</Label>
+            <Textarea
+              id="regularization-reason"
+              value={regularizationForm.reason}
+              onChange={(event) => setRegularizationForm((current) => ({ ...current, reason: event.target.value }))}
+              placeholder="Explain what went wrong and why this attendance needs correction."
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsRegularizationModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitRegularization} disabled={regularizationMutation.isPending}>
+              {regularizationMutation.isPending ? 'Submitting...' : 'Submit Request'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={!!reviewingRequest}
+        onClose={() => {
+          setReviewingRequest(null);
+          setReviewNotes('');
+        }}
+        title="Review Regularization Request"
+      >
+        {reviewingRequest && (
+          <div className="space-y-4">
+            <div>
+              <p className="font-medium">
+                {reviewingRequest.user.firstName} {reviewingRequest.user.lastName}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {regularizationTypeLabels[reviewingRequest.type]} • {new Date(reviewingRequest.attendanceDate).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            </div>
+            <div className="rounded-lg border p-3 text-sm text-muted-foreground">
+              <p>{reviewingRequest.reason}</p>
+              <p className="mt-2">
+                Requested:
+                {' '}
+                {reviewingRequest.requestedCheckInAt ? `IN ${formatTime(reviewingRequest.requestedCheckInAt)} ` : ''}
+                {reviewingRequest.requestedCheckOutAt ? `OUT ${formatTime(reviewingRequest.requestedCheckOutAt)} ` : ''}
+                {reviewingRequest.requestedWorkMode ? workModeLabels[reviewingRequest.requestedWorkMode] : ''}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="review-notes">Review Notes</Label>
+              <Textarea
+                id="review-notes"
+                value={reviewNotes}
+                onChange={(event) => setReviewNotes(event.target.value)}
+                placeholder="Optional note for approval or rejection."
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => handleReviewRegularization('REJECTED')}
+                disabled={reviewRegularizationMutation.isPending}
+              >
+                Reject
+              </Button>
+              <Button onClick={() => handleReviewRegularization('APPROVED')} disabled={reviewRegularizationMutation.isPending}>
+                {reviewRegularizationMutation.isPending ? 'Saving...' : 'Approve'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

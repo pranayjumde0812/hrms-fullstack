@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { WorkMode } from '@prisma/client';
+import { AttendanceRegularizationStatus, AttendanceRegularizationType, WorkMode } from '@prisma/client';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { attendanceService } from '../services';
 import { asyncHandler } from '../utils/http';
@@ -68,4 +68,57 @@ export const getMonthlyAttendanceHandler = asyncHandler(async (req: AuthRequest,
 export const getViewableAttendanceUsersHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
   const users = await attendanceService.listAttendanceViewableUsers(req.user!);
   res.json({ success: true, message: 'Attendance users retrieved', data: users });
+});
+
+export const getRegularizationsHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const regularizations = await attendanceService.getRegularizations(req.user!);
+  res.json({ success: true, message: 'Attendance regularizations retrieved', data: regularizations });
+});
+
+export const createRegularizationHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const {
+    attendanceDate,
+    type,
+    reason,
+    requestedCheckInTime,
+    requestedCheckOutTime,
+    requestedWorkMode,
+  } = req.body as {
+    attendanceDate: string;
+    type: AttendanceRegularizationType;
+    reason: string;
+    requestedCheckInTime?: string;
+    requestedCheckOutTime?: string;
+    requestedWorkMode?: WorkMode;
+  };
+
+  const regularization = await attendanceService.createRegularization({
+    userId: req.user!.id,
+    role: req.user!.role,
+    attendanceDate,
+    type,
+    reason,
+    requestedCheckInTime,
+    requestedCheckOutTime,
+    requestedWorkMode,
+  });
+
+  res.json({ success: true, message: 'Attendance regularization requested', data: regularization });
+});
+
+export const reviewRegularizationHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { id } = req.params as unknown as { id: number };
+  const { status, reviewNotes } = req.body as {
+    status: AttendanceRegularizationStatus;
+    reviewNotes?: string;
+  };
+
+  const regularization = await attendanceService.reviewRegularization({
+    requestId: id,
+    reviewer: req.user!,
+    status,
+    reviewNotes,
+  });
+
+  res.json({ success: true, message: 'Attendance regularization reviewed', data: regularization });
 });
