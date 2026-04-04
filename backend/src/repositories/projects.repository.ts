@@ -9,7 +9,7 @@ export type ProjectData = {
 };
 
 const projectInclude = {
-  users: { select: { id: true, firstName: true, lastName: true } },
+  users: { select: { id: true, firstName: true, lastName: true, role: true } },
 } as const;
 
 type ProjectId = NonNullable<Prisma.ProjectWhereUniqueInput['id']>;
@@ -22,6 +22,7 @@ export const listAllProjects = () => {
 export const listProjectsForUser = (userId: UserId) => {
   return prisma.project.findMany({
     where: { users: { some: { id: userId } } },
+    include: projectInclude,
   });
 };
 

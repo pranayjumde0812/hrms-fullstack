@@ -43,8 +43,11 @@ model User {
   hourlyRate     Float       @default(0.0)
   joiningDate    DateTime
   departmentId   Int?
+  managerId      Int?
   
   department     Department? @relation(fields: [departmentId], references: [id])
+  manager        User?       @relation("UserManager", fields: [managerId], references: [id])
+  subordinates   User[]      @relation("UserManager")
   projects       Project[]   @relation("UserProjects")
   timesheets     Timesheet[]
   attendances    Attendance[]

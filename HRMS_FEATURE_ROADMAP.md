@@ -21,7 +21,7 @@ Status guide:
 - `[ ]` Holiday and weekly-off attendance handling
 
 ### 2. Manager attendance workflow
-- `[ ]` Reporting manager mapping
+- `[x]` Reporting manager mapping
 - `[ ]` Team attendance today widget
 - `[ ]` Missed check-in alerts for managers
 - `[ ]` Approve or reject attendance correction requests

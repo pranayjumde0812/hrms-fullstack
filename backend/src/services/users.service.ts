@@ -3,6 +3,40 @@ import { usersRepository } from '../repositories';
 import { CreateUserData, UpdateUserData } from '../repositories/users.repository';
 import { AppError } from '../utils/http';
 
+const MANAGER_ROLES: Role[] = ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER'];
+
+const validateManagerAssignment = async ({
+  managerId,
+  userId,
+  role,
+}: {
+  managerId?: number | null;
+  userId?: number;
+  role?: Role;
+}) => {
+  if (role === 'SUPER_ADMIN' && managerId != null) {
+    throw new AppError(400, 'Super Admin cannot have a reporting manager');
+  }
+
+  if (managerId == null) {
+    return;
+  }
+
+  if (userId != null && managerId === userId) {
+    throw new AppError(400, 'Employee cannot report to themselves');
+  }
+
+  const manager = await usersRepository.findUserById(managerId);
+
+  if (!manager) {
+    throw new AppError(404, 'Reporting manager not found');
+  }
+
+  if (!MANAGER_ROLES.includes(manager.role)) {
+    throw new AppError(400, 'Selected reporting manager must be a manager, HR, or Super Admin');
+  }
+};
+
 export const listUsers = () => {
   return usersRepository.listUsers();
 };
@@ -13,6 +47,11 @@ export const createUser = async (data: CreateUserData) => {
   if (existing) {
     throw new AppError(400, 'Email already exists');
   }
+
+  await validateManagerAssignment({
+    managerId: data.managerId,
+    role: data.role,
+  });
 
   const user = await usersRepository.createUser(data);
   const { password, ...safeUser } = user;
@@ -35,6 +74,18 @@ export const getUserById = async (userId: number, authedUser: { id: number; role
 };
 
 export const updateUser = async (userId: number, data: UpdateUserData) => {
+  const existingUser = await usersRepository.findUserById(userId);
+
+  if (!existingUser) {
+    throw new AppError(404, 'User not found');
+  }
+
+  await validateManagerAssignment({
+    managerId: data.managerId,
+    userId,
+    role: data.role ?? existingUser.role,
+  });
+
   const user = await usersRepository.updateUser(userId, data);
   const { password, ...safeUser } = user;
   return safeUser;

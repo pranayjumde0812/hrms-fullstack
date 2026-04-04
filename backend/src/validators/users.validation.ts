@@ -14,6 +14,7 @@ export const createUserSchema = z.object({
   hourlyRate: z.number().min(0).optional(),
   joiningDate: z.string().transform((str) => new Date(str)),
   departmentId: z.coerce.number().optional(),
+  managerId: z.coerce.number().nullable().optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -23,4 +24,5 @@ export const updateUserSchema = z.object({
   baseSalary: z.number().min(0).optional(),
   hourlyRate: z.number().min(0).optional(),
   departmentId: z.coerce.number().nullable().optional(),
+  managerId: z.coerce.number().nullable().optional(),
 });

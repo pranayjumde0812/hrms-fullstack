@@ -83,6 +83,7 @@ export const EmployeesView = () => {
     { key: 'lastName', header: 'Last Name' },
     { key: 'email', header: 'Email' },
     { key: 'department', header: 'Department', render: (row: any) => row.department?.name || <span className="text-muted-foreground italic">Unassigned</span> },
+    { key: 'manager', header: 'Reporting Manager', render: (row: any) => row.manager ? `${row.manager.firstName} ${row.manager.lastName}` : <span className="text-muted-foreground italic">Not assigned</span> },
     { key: 'role', header: 'Role', render: (row: any) => <Badge variant={row.role === 'SUPER_ADMIN' ? 'destructive' : row.role === 'HR_MANAGER' ? 'warning' : 'default'}>{row.role.replace(/_/g, ' ')}</Badge> },
     { key: 'baseSalary', header: 'Base Salary', render: (row: any) => `$${(row.baseSalary || 0).toLocaleString()}` },
     { key: 'actions', header: 'Actions', render: (row: any) => (
@@ -110,12 +111,12 @@ export const EmployeesView = () => {
 
       {/* Add Employee Modal */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Employee">
-        <EmployeeForm departments={departments || []} onSubmit={(data: any) => createMutation.mutate(data)} loading={createMutation.isPending} />
+        <EmployeeForm departments={departments || []} users={users || []} onSubmit={(data: any) => createMutation.mutate(data)} loading={createMutation.isPending} />
       </Modal>
 
       {/* Edit Employee Modal */}
       <Modal isOpen={!!editUser} onClose={() => setEditUser(null)} title="Edit Employee">
-        {editUser && <EmployeeEditForm user={editUser} departments={departments || []} onSubmit={(data: any) => updateMutation.mutate({ id: editUser.id, ...data })} loading={updateMutation.isPending} />}
+        {editUser && <EmployeeEditForm user={editUser} users={users || []} departments={departments || []} onSubmit={(data: any) => updateMutation.mutate({ id: editUser.id, ...data })} loading={updateMutation.isPending} />}
       </Modal>
 
       {/* Delete Confirmation */}
@@ -134,15 +135,17 @@ export const EmployeesView = () => {
   );
 };
 
-function EmployeeForm({ departments, onSubmit, loading }: { departments: any[], onSubmit: (data: any) => void, loading: boolean }) {
-  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', role: 'EMPLOYEE', baseSalary: 0, hourlyRate: 0, joiningDate: new Date().toISOString().split('T')[0], departmentId: '' });
+function EmployeeForm({ departments, users, onSubmit, loading }: { departments: any[], users: any[], onSubmit: (data: any) => void, loading: boolean }) {
+  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', role: 'EMPLOYEE', baseSalary: 0, hourlyRate: 0, joiningDate: new Date().toISOString().split('T')[0], departmentId: '', managerId: '' });
+  const managerOptions = users.filter((candidate: any) => ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER'].includes(candidate.role));
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
       ...form,
       baseSalary: Number(form.baseSalary),
       hourlyRate: Number(form.hourlyRate),
-      departmentId: form.departmentId ? Number(form.departmentId) : undefined
+      departmentId: form.departmentId ? Number(form.departmentId) : undefined,
+      managerId: form.role === 'SUPER_ADMIN' ? null : form.managerId ? Number(form.managerId) : null,
     });
   };
   return (
@@ -171,6 +174,13 @@ function EmployeeForm({ departments, onSubmit, loading }: { departments: any[], 
           </Select>
         </div>
       </div>
+      <div className="space-y-2">
+        <Label>Reporting Manager</Label>
+        <Select value={form.managerId} onChange={e => setForm(p => ({ ...p, managerId: e.target.value }))} disabled={form.role === 'SUPER_ADMIN'}>
+          <option value="">{form.role === 'SUPER_ADMIN' ? 'Super Admin has no manager' : 'No Reporting Manager'}</option>
+          {managerOptions.map((candidate: any) => <option key={candidate.id} value={candidate.id}>{candidate.firstName} {candidate.lastName} ({candidate.role.replace(/_/g, ' ')})</option>)}
+        </Select>
+      </div>
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2"><Label>Base Salary</Label><Input type="number" value={form.baseSalary} onChange={e => setForm(p => ({ ...p, baseSalary: Number(e.target.value) }))} min={0} /></div>
         <div className="space-y-2"><Label>Hourly Rate</Label><Input type="number" value={form.hourlyRate} onChange={e => setForm(p => ({ ...p, hourlyRate: Number(e.target.value) }))} min={0} /></div>
@@ -183,15 +193,17 @@ function EmployeeForm({ departments, onSubmit, loading }: { departments: any[], 
   );
 }
 
-function EmployeeEditForm({ user, departments, onSubmit, loading }: { user: any, departments: any[], onSubmit: (data: any) => void, loading: boolean }) {
-  const [form, setForm] = useState({ firstName: user.firstName, lastName: user.lastName, role: user.role, baseSalary: user.baseSalary || 0, hourlyRate: user.hourlyRate || 0, departmentId: user.departmentId || '' });
+function EmployeeEditForm({ user, users, departments, onSubmit, loading }: { user: any, users: any[], departments: any[], onSubmit: (data: any) => void, loading: boolean }) {
+  const [form, setForm] = useState({ firstName: user.firstName, lastName: user.lastName, role: user.role, baseSalary: user.baseSalary || 0, hourlyRate: user.hourlyRate || 0, departmentId: user.departmentId || '', managerId: user.managerId || '' });
+  const managerOptions = users.filter((candidate: any) => candidate.id !== user.id && ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER'].includes(candidate.role));
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
       ...form,
       baseSalary: Number(form.baseSalary),
       hourlyRate: Number(form.hourlyRate),
-      departmentId: form.departmentId ? Number(form.departmentId) : null
+      departmentId: form.departmentId ? Number(form.departmentId) : null,
+      managerId: form.role === 'SUPER_ADMIN' ? null : form.managerId ? Number(form.managerId) : null,
     });
   };
   return (
@@ -218,6 +230,17 @@ function EmployeeEditForm({ user, departments, onSubmit, loading }: { user: any,
           </Select>
         </div>
       </div>
+      <div className="space-y-2">
+        <Label>Reporting Manager</Label>
+        <Select
+          value={form.managerId}
+          onChange={e => setForm(p => ({ ...p, managerId: e.target.value }))}
+          disabled={form.role === 'SUPER_ADMIN'}
+        >
+          <option value="">{form.role === 'SUPER_ADMIN' ? 'Super Admin has no manager' : 'No Reporting Manager'}</option>
+          {managerOptions.map((candidate: any) => <option key={candidate.id} value={candidate.id}>{candidate.firstName} {candidate.lastName} ({candidate.role.replace(/_/g, ' ')})</option>)}
+        </Select>
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2"><Label>Base Salary</Label><Input type="number" value={form.baseSalary} onChange={e => setForm(p => ({ ...p, baseSalary: Number(e.target.value) }))} min={0} /></div>
         <div className="space-y-2"><Label>Hourly Rate</Label><Input type="number" value={form.hourlyRate} onChange={e => setForm(p => ({ ...p, hourlyRate: Number(e.target.value) }))} min={0} /></div>
@@ -238,9 +261,14 @@ export const ProjectsView = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [assignProject, setAssignProject] = useState<any>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<any>(null);
+  const isManager = authedUser && ['SUPER_ADMIN', 'PROJECT_MANAGER'].includes(authedUser.role);
 
   const { data: projects, isLoading } = useQuery({ queryKey: ['projects'], queryFn: () => api.get('/projects').then((res: any) => res.data) });
-  const { data: allUsers } = useQuery({ queryKey: ['users'], queryFn: () => api.get('/users').then((res: any) => res.data) });
+  const { data: allUsers } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api.get('/users').then((res: any) => res.data),
+    enabled: !!isManager,
+  });
 
   const createMutation = useMutation({
     mutationFn: (data: any) => api.post('/projects', data),
@@ -256,14 +284,50 @@ export const ProjectsView = () => {
     mutationFn: (id: number) => api.delete(`/projects/${id}`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['projects'] }); queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }); setDeleteConfirm(null); }
   });
+  const getProjectManager = (row: any) =>
+    row.users?.find((member: any) => member.role === 'PROJECT_MANAGER');
 
-  const isManager = authedUser && ['SUPER_ADMIN', 'PROJECT_MANAGER'].includes(authedUser.role);
+  const getTeammates = (row: any) =>
+    (row.users || []).filter((member: any) => member.role !== 'PROJECT_MANAGER');
 
   const columns = [
     { key: 'name', header: 'Project Name' },
     { key: 'description', header: 'Description', render: (row: any) => <span className="text-muted-foreground">{row.description || '—'}</span> },
     { key: 'startDate', header: 'Start Date', render: (row: any) => new Date(row.startDate).toLocaleDateString() },
-    { key: 'users', header: 'Team', render: (row: any) => <Badge variant="warning">{row.users?.length || 0} Members</Badge> },
+    {
+      key: 'projectManager',
+      header: 'Project Manager',
+      render: (row: any) => {
+        const manager = getProjectManager(row);
+        return manager ? (
+          <div className="flex flex-col">
+            <span className="font-medium">{manager.firstName} {manager.lastName}</span>
+            <span className="text-xs text-muted-foreground">Project Manager</span>
+          </div>
+        ) : (
+          <span className="text-muted-foreground italic">Not assigned</span>
+        );
+      },
+    },
+    {
+      key: 'users',
+      header: 'Team',
+      render: (row: any) => {
+        const teammates = getTeammates(row);
+        return (
+          <div className="space-y-2">
+            <Badge variant="warning">{row.users?.length || 0} Members</Badge>
+            {teammates.length > 0 ? (
+              <div className="max-w-xs text-xs text-muted-foreground">
+                {teammates.map((member: any) => `${member.firstName} ${member.lastName}`).join(', ')}
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground italic">No teammates assigned</div>
+            )}
+          </div>
+        );
+      },
+    },
     ...(isManager ? [{ key: 'actions', header: 'Actions', render: (row: any) => (
       <div className="flex items-center gap-1">
         <button onClick={() => setAssignProject(row)} className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground transition-colors" title="Assign members"><UserPlus className="h-4 w-4" /></button>
