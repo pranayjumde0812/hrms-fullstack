@@ -62,6 +62,7 @@ export const EmployeesView = () => {
 
   const { data: users, isLoading } = useQuery({ queryKey: ['users'], queryFn: () => api.get('/users').then((res: any) => res.data) });
   const { data: departments } = useQuery({ queryKey: ['departments'], queryFn: () => api.get('/departments').then((res: any) => res.data) });
+  const { data: workLocations } = useQuery({ queryKey: ['work-locations'], queryFn: () => api.get('/work-locations').then((res: any) => res.data) });
 
   const createMutation = useMutation({
     mutationFn: (data: any) => api.post('/users', data),
@@ -79,10 +80,15 @@ export const EmployeesView = () => {
   });
 
   const columns = [
+    { key: 'employeeCode', header: 'Code', render: (row: any) => row.employeeCode || <span className="text-muted-foreground italic">-</span> },
     { key: 'firstName', header: 'First Name' },
     { key: 'lastName', header: 'Last Name' },
     { key: 'email', header: 'Email' },
+    { key: 'designation', header: 'Designation', render: (row: any) => row.designation || <span className="text-muted-foreground italic">-</span> },
+    { key: 'employmentType', header: 'Employment', render: (row: any) => row.employmentType ? row.employmentType.replace(/_/g, ' ') : <span className="text-muted-foreground italic">-</span> },
+    { key: 'lifecycleStatus', header: 'Status', render: (row: any) => row.lifecycleStatus ? <Badge variant={row.lifecycleStatus === 'ACTIVE' ? 'success' : row.lifecycleStatus === 'PROBATION' ? 'warning' : 'default'}>{row.lifecycleStatus.replace(/_/g, ' ')}</Badge> : <span className="text-muted-foreground italic">-</span> },
     { key: 'department', header: 'Department', render: (row: any) => row.department?.name || <span className="text-muted-foreground italic">Unassigned</span> },
+    { key: 'workLocation', header: 'Location', render: (row: any) => row.workLocation?.name || <span className="text-muted-foreground italic">Unassigned</span> },
     { key: 'manager', header: 'Reporting Manager', render: (row: any) => row.manager ? `${row.manager.firstName} ${row.manager.lastName}` : <span className="text-muted-foreground italic">Not assigned</span> },
     { key: 'role', header: 'Role', render: (row: any) => <Badge variant={row.role === 'SUPER_ADMIN' ? 'destructive' : row.role === 'HR_MANAGER' ? 'warning' : 'default'}>{row.role.replace(/_/g, ' ')}</Badge> },
     { key: 'baseSalary', header: 'Base Salary', render: (row: any) => `$${(row.baseSalary || 0).toLocaleString()}` },
@@ -111,12 +117,12 @@ export const EmployeesView = () => {
 
       {/* Add Employee Modal */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Employee">
-        <EmployeeForm departments={departments || []} users={users || []} onSubmit={(data: any) => createMutation.mutate(data)} loading={createMutation.isPending} />
+        <EmployeeForm departments={departments || []} users={users || []} workLocations={workLocations || []} onSubmit={(data: any) => createMutation.mutate(data)} loading={createMutation.isPending} />
       </Modal>
 
       {/* Edit Employee Modal */}
       <Modal isOpen={!!editUser} onClose={() => setEditUser(null)} title="Edit Employee">
-        {editUser && <EmployeeEditForm user={editUser} users={users || []} departments={departments || []} onSubmit={(data: any) => updateMutation.mutate({ id: editUser.id, ...data })} loading={updateMutation.isPending} />}
+        {editUser && <EmployeeEditForm user={editUser} users={users || []} departments={departments || []} workLocations={workLocations || []} onSubmit={(data: any) => updateMutation.mutate({ id: editUser.id, ...data })} loading={updateMutation.isPending} />}
       </Modal>
 
       {/* Delete Confirmation */}
@@ -135,17 +141,37 @@ export const EmployeesView = () => {
   );
 };
 
-function EmployeeForm({ departments, users, onSubmit, loading }: { departments: any[], users: any[], onSubmit: (data: any) => void, loading: boolean }) {
-  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', role: 'EMPLOYEE', baseSalary: 0, hourlyRate: 0, joiningDate: new Date().toISOString().split('T')[0], departmentId: '', managerId: '' });
+function EmployeeForm({ departments, users, workLocations, onSubmit, loading }: { departments: any[], users: any[], workLocations: any[], onSubmit: (data: any) => void, loading: boolean }) {
+  const [form, setForm] = useState({
+    employeeCode: '',
+    email: '',
+    password: '',
+    firstName: '',
+    lastName: '',
+    role: 'EMPLOYEE',
+    designation: '',
+    employmentType: 'FULL_TIME',
+    lifecycleStatus: 'ACTIVE',
+    baseSalary: 0,
+    hourlyRate: 0,
+    joiningDate: new Date().toISOString().split('T')[0],
+    timeZone: 'Asia/Calcutta',
+    departmentId: '',
+    managerId: '',
+    workLocationId: '',
+  });
   const managerOptions = users.filter((candidate: any) => ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER'].includes(candidate.role));
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
       ...form,
+      employeeCode: form.employeeCode || undefined,
+      designation: form.designation || undefined,
       baseSalary: Number(form.baseSalary),
       hourlyRate: Number(form.hourlyRate),
       departmentId: form.departmentId ? Number(form.departmentId) : undefined,
       managerId: form.role === 'SUPER_ADMIN' ? null : form.managerId ? Number(form.managerId) : null,
+      workLocationId: form.workLocationId ? Number(form.workLocationId) : null,
     });
   };
   return (
@@ -154,9 +180,13 @@ function EmployeeForm({ departments, users, onSubmit, loading }: { departments: 
         <div className="space-y-2"><Label>First Name</Label><Input value={form.firstName} onChange={e => setForm(p => ({ ...p, firstName: e.target.value }))} required /></div>
         <div className="space-y-2"><Label>Last Name</Label><Input value={form.lastName} onChange={e => setForm(p => ({ ...p, lastName: e.target.value }))} required /></div>
       </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2"><Label>Employee Code</Label><Input value={form.employeeCode} onChange={e => setForm(p => ({ ...p, employeeCode: e.target.value.toUpperCase() }))} placeholder="Optional" /></div>
+        <div className="space-y-2"><Label>Designation</Label><Input value={form.designation} onChange={e => setForm(p => ({ ...p, designation: e.target.value }))} placeholder="Optional" /></div>
+      </div>
       <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} required /></div>
       <div className="space-y-2"><Label>Password</Label><Input type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required minLength={6} /></div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label>Role</Label>
           <Select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
@@ -173,6 +203,35 @@ function EmployeeForm({ departments, users, onSubmit, loading }: { departments: 
             {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </Select>
         </div>
+        <div className="space-y-2">
+          <Label>Work Location</Label>
+          <Select value={form.workLocationId} onChange={e => setForm(p => ({ ...p, workLocationId: e.target.value }))}>
+            <option value="">No Work Location</option>
+            {workLocations.map((location: any) => <option key={location.id} value={location.id}>{location.name}</option>)}
+          </Select>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Employment Type</Label>
+          <Select value={form.employmentType} onChange={e => setForm(p => ({ ...p, employmentType: e.target.value }))}>
+            <option value="FULL_TIME">Full Time</option>
+            <option value="PART_TIME">Part Time</option>
+            <option value="INTERN">Intern</option>
+            <option value="CONTRACTOR">Contractor</option>
+            <option value="CONSULTANT">Consultant</option>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Lifecycle Status</Label>
+          <Select value={form.lifecycleStatus} onChange={e => setForm(p => ({ ...p, lifecycleStatus: e.target.value }))}>
+            <option value="ACTIVE">Active</option>
+            <option value="PROBATION">Probation</option>
+            <option value="NOTICE">Notice</option>
+            <option value="EXITED">Exited</option>
+          </Select>
+        </div>
+        <div className="space-y-2"><Label>Timezone</Label><Input value={form.timeZone} onChange={e => setForm(p => ({ ...p, timeZone: e.target.value }))} required /></div>
       </div>
       <div className="space-y-2">
         <Label>Reporting Manager</Label>
@@ -193,17 +252,35 @@ function EmployeeForm({ departments, users, onSubmit, loading }: { departments: 
   );
 }
 
-function EmployeeEditForm({ user, users, departments, onSubmit, loading }: { user: any, users: any[], departments: any[], onSubmit: (data: any) => void, loading: boolean }) {
-  const [form, setForm] = useState({ firstName: user.firstName, lastName: user.lastName, role: user.role, baseSalary: user.baseSalary || 0, hourlyRate: user.hourlyRate || 0, departmentId: user.departmentId || '', managerId: user.managerId || '' });
+function EmployeeEditForm({ user, users, departments, workLocations, onSubmit, loading }: { user: any, users: any[], departments: any[], workLocations: any[], onSubmit: (data: any) => void, loading: boolean }) {
+  const [form, setForm] = useState({
+    employeeCode: user.employeeCode || '',
+    firstName: user.firstName,
+    lastName: user.lastName,
+    role: user.role,
+    designation: user.designation || '',
+    employmentType: user.employmentType || 'FULL_TIME',
+    lifecycleStatus: user.lifecycleStatus || 'ACTIVE',
+    baseSalary: user.baseSalary || 0,
+    hourlyRate: user.hourlyRate || 0,
+    timeZone: user.timeZone || 'Asia/Calcutta',
+    departmentId: user.departmentId || '',
+    managerId: user.managerId || '',
+    workLocationId: user.workLocationId || '',
+  });
   const managerOptions = users.filter((candidate: any) => candidate.id !== user.id && ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER'].includes(candidate.role));
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
       ...form,
+      employeeCode: form.employeeCode || null,
+      designation: form.designation || null,
       baseSalary: Number(form.baseSalary),
       hourlyRate: Number(form.hourlyRate),
       departmentId: form.departmentId ? Number(form.departmentId) : null,
       managerId: form.role === 'SUPER_ADMIN' ? null : form.managerId ? Number(form.managerId) : null,
+      workLocationId: form.workLocationId ? Number(form.workLocationId) : null,
+      timeZone: form.timeZone || null,
     });
   };
   return (
@@ -213,6 +290,10 @@ function EmployeeEditForm({ user, users, departments, onSubmit, loading }: { use
         <div className="space-y-2"><Label>Last Name</Label><Input value={form.lastName} onChange={e => setForm(p => ({ ...p, lastName: e.target.value }))} required /></div>
       </div>
       <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2"><Label>Employee Code</Label><Input value={form.employeeCode} onChange={e => setForm(p => ({ ...p, employeeCode: e.target.value.toUpperCase() }))} placeholder="Optional" /></div>
+        <div className="space-y-2"><Label>Designation</Label><Input value={form.designation} onChange={e => setForm(p => ({ ...p, designation: e.target.value }))} placeholder="Optional" /></div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label>Role</Label>
           <Select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
@@ -229,6 +310,35 @@ function EmployeeEditForm({ user, users, departments, onSubmit, loading }: { use
             {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </Select>
         </div>
+        <div className="space-y-2">
+          <Label>Work Location</Label>
+          <Select value={form.workLocationId} onChange={e => setForm(p => ({ ...p, workLocationId: e.target.value }))}>
+            <option value="">No Work Location</option>
+            {workLocations.map((location: any) => <option key={location.id} value={location.id}>{location.name}</option>)}
+          </Select>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Employment Type</Label>
+          <Select value={form.employmentType} onChange={e => setForm(p => ({ ...p, employmentType: e.target.value }))}>
+            <option value="FULL_TIME">Full Time</option>
+            <option value="PART_TIME">Part Time</option>
+            <option value="INTERN">Intern</option>
+            <option value="CONTRACTOR">Contractor</option>
+            <option value="CONSULTANT">Consultant</option>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Lifecycle Status</Label>
+          <Select value={form.lifecycleStatus} onChange={e => setForm(p => ({ ...p, lifecycleStatus: e.target.value }))}>
+            <option value="ACTIVE">Active</option>
+            <option value="PROBATION">Probation</option>
+            <option value="NOTICE">Notice</option>
+            <option value="EXITED">Exited</option>
+          </Select>
+        </div>
+        <div className="space-y-2"><Label>Timezone</Label><Input value={form.timeZone} onChange={e => setForm(p => ({ ...p, timeZone: e.target.value }))} /></div>
       </div>
       <div className="space-y-2">
         <Label>Reporting Manager</Label>

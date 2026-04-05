@@ -11,6 +11,7 @@ import { LeavesPage } from '@/modules/leaves/pages/LeavesPage';
 import { PayrollPage } from '@/modules/payroll/pages/PayrollPage';
 import { ProjectsPage } from '@/modules/projects/pages/ProjectsPage';
 import { TimesheetsPage } from '@/modules/timesheets/pages/TimesheetsPage';
+import { HRMastersView } from '@/pages/HRMastersView';
 
 export function AppRouter() {
   return (
@@ -39,6 +40,14 @@ export function AppRouter() {
           element={
             <ProtectedRoute roles={['SUPER_ADMIN', 'HR_MANAGER']}>
               <DepartmentsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="hr-masters"
+          element={
+            <ProtectedRoute roles={['SUPER_ADMIN', 'HR_MANAGER']}>
+              <HRMastersView />
             </ProtectedRoute>
           }
         />

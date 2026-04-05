@@ -48,6 +48,11 @@ type Holiday = {
   name: string;
   holidayDate: string;
   description?: string | null;
+  isOptional?: boolean;
+  workLocation?: {
+    id: number;
+    name: string;
+  } | null;
 };
 
 type RegularizationType =
@@ -302,6 +307,8 @@ export function AttendancePage() {
     name: '',
     holidayDate: new Date().toISOString().split('T')[0],
     description: '',
+    workLocationId: '',
+    isOptional: false,
   });
 
   const canReviewOtherAttendance = user ? ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER'].includes(user.role) : false;
@@ -351,6 +358,12 @@ export function AttendancePage() {
           },
         })
         .then((res: any) => res.data as Holiday[]),
+    enabled: !!user,
+  });
+
+  const { data: workLocations = [] } = useQuery({
+    queryKey: ['work-locations'],
+    queryFn: () => api.get('/work-locations').then((res: any) => res.data as Array<{ id: number; name: string }>),
     enabled: !!user,
   });
 
@@ -509,6 +522,7 @@ export function AttendancePage() {
       api.post('/holidays', {
         ...holidayForm,
         description: holidayForm.description || undefined,
+        workLocationId: holidayForm.workLocationId ? Number(holidayForm.workLocationId) : null,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['holidays'] });
@@ -517,6 +531,8 @@ export function AttendancePage() {
         name: '',
         holidayDate: new Date().toISOString().split('T')[0],
         description: '',
+        workLocationId: '',
+        isOptional: false,
       });
     },
   });
@@ -1189,6 +1205,8 @@ export function AttendancePage() {
                           {new Date(holiday.holidayDate).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
                         </p>
                         {holiday.description ? <p className="mt-1 text-xs text-muted-foreground">{holiday.description}</p> : null}
+                        {holiday.workLocation?.name ? <p className="mt-1 text-xs text-muted-foreground">Location: {holiday.workLocation.name}</p> : null}
+                        {holiday.isOptional ? <p className="mt-1 text-xs text-muted-foreground">Optional holiday</p> : null}
                       </div>
                       {canManageHolidays ? (
                         <Button variant="outline" onClick={() => handleDeleteHoliday(holiday.id)} disabled={deleteHolidayMutation.isPending}>
@@ -1383,6 +1401,44 @@ export function AttendancePage() {
                 }
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="holiday-location">Work Location</Label>
+              <Select
+                id="holiday-location"
+                value={holidayForm.workLocationId}
+                onChange={(event) =>
+                  setHolidayForm((current) => ({
+                    ...current,
+                    workLocationId: event.target.value,
+                  }))
+                }
+              >
+                <option value="">All Locations</option>
+                {workLocations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="holiday-optional">Holiday Type</Label>
+              <Select
+                id="holiday-optional"
+                value={String(holidayForm.isOptional)}
+                onChange={(event) =>
+                  setHolidayForm((current) => ({
+                    ...current,
+                    isOptional: event.target.value === 'true',
+                  }))
+                }
+              >
+                <option value="false">Mandatory</option>
+                <option value="true">Optional</option>
+              </Select>
             </div>
           </div>
           <div className="flex justify-end gap-2">

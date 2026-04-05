@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 import { 
   Building2, Users, LayoutDashboard, Clock, DollarSign, 
-  LogOut, Briefcase, Calendar, Sun, Moon, PanelLeftClose, PanelLeftOpen
+  LogOut, Briefcase, Calendar, Sun, Moon, PanelLeftClose, PanelLeftOpen, MapPinned
 } from 'lucide-react';
 
 export default function AppLayout() {
@@ -41,6 +41,7 @@ export default function AppLayout() {
     { name: 'Attendance', icon: Clock, path: '/attendance', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER', 'EMPLOYEE'] },
     { name: 'Employees', icon: Users, path: '/employees', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
     { name: 'Departments', icon: Building2, path: '/departments', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
+    { name: 'HR Masters', icon: MapPinned, path: '/hr-masters', roles: ['SUPER_ADMIN', 'HR_MANAGER'] },
     { name: 'Projects', icon: Briefcase, path: '/projects', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER', 'EMPLOYEE'] },
     { name: 'Timesheets', icon: Calendar, path: '/timesheets', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER', 'EMPLOYEE'] },
     { name: 'Payroll', icon: DollarSign, path: '/payroll', roles: ['SUPER_ADMIN', 'HR_MANAGER', 'EMPLOYEE'] },
