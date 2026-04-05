@@ -336,6 +336,7 @@ Example for leave:
 
 ## Notes
 
+- Database changes should always follow Prisma migration files, not ad-hoc schema pushes.
 - `managerId` is now the correct base for reporting structure, which is closer to industry practice than relying only on `PROJECT_MANAGER`.
 - `PROJECT_MANAGER` should not be treated as the only manager role; approval authority should come from reporting structure and role permissions together.
 - Current roles are acceptable for Phase 1, but Phase 2 should likely add `ADMIN / HR_EXECUTIVE`, `TEAM_LEAD`, and possibly `FINANCE / PAYROLL`.

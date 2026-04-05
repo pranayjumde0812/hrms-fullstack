@@ -73,7 +73,7 @@ model User {
   department     Department? @relation(fields: [departmentId], references: [id])
   manager        User?       @relation("UserManager", fields: [managerId], references: [id])
   subordinates   User[]      @relation("UserManager")
-  projects       Project[]   @relation("UserProjects")
+  projectAssignments UserProjectAssignment[]
   timesheets     Timesheet[]
   attendances    Attendance[]
   attendanceRegularizations AttendanceRegularization[] @relation("AttendanceRegularizationRequester")
@@ -114,11 +114,29 @@ model Project {
   description String?
   startDate   DateTime
   endDate     DateTime?
-  users       User[]      @relation("UserProjects")
+  projectAssignments UserProjectAssignment[]
   timesheets  Timesheet[]
   
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+}
+
+model UserProjectAssignment {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  projectId   Int
+  assignedAt  DateTime @default(now())
+  isActive    Boolean  @default(true)
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+  @@index([userId, isActive])
 }
 
 model Timesheet {
