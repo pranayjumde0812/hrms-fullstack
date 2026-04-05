@@ -711,285 +711,308 @@ export function AttendancePage() {
 
       {feedback && (
         <div
-          className={`rounded-lg border px-4 py-3 text-sm ${
-            feedback.type === 'success'
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
-              : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300'
-          }`}
+          className={`rounded-lg border px-4 py-3 text-sm ${feedback.type === 'success'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
+            : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300'
+            }`}
         >
           {feedback.message}
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
+      {isAttendanceRequired ? (
+        <div className="grid gap-6 xl:grid-cols-[1.2fr,0.8fr]">
+          <Card className="border-primary/10 shadow-sm">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-2xl">Today&apos;s attendance</CardTitle>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
+                </div>
+                <Badge variant={isCheckedIn ? 'success' : todayAttendance?.checkOutAt ? 'default' : 'warning'}>
+                  {isCheckedIn ? 'Checked In' : todayAttendance?.checkOutAt ? 'Checked Out' : 'Not Checked In'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-xl border bg-background/70 p-4">
+                  <div className="mb-3 flex items-center gap-2 text-muted-foreground">
+                    <Building2 className="h-4 w-4" />
+                    <span className="text-sm font-medium">Work Mode</span>
+                  </div>
+                  <p className="text-2xl font-semibold">
+                    {todayAttendance ? workModeLabels[todayAttendance.workMode] : 'Not selected'}
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-background/70 p-4">
+                  <div className="mb-3 flex items-center gap-2 text-muted-foreground">
+                    <LogIn className="h-4 w-4" />
+                    <span className="text-sm font-medium">Check In</span>
+                  </div>
+                  <p className="text-2xl font-semibold">{formatTime(todayAttendance?.checkInAt)}</p>
+                </div>
+                <div className="rounded-xl border bg-background/70 p-4">
+                  <div className="mb-3 flex items-center gap-2 text-muted-foreground">
+                    <LogOut className="h-4 w-4" />
+                    <span className="text-sm font-medium">Check Out</span>
+                  </div>
+                  <p className="text-2xl font-semibold">{formatTime(todayAttendance?.checkOutAt)}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 rounded-xl border border-dashed p-4 md:grid-cols-[1fr,auto,auto] md:items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="work-mode">Select work mode</Label>
+                  <Select
+                    id="work-mode"
+                    value={todayAttendance?.workMode ?? selectedMode}
+                    onChange={(event) => setSelectedMode(event.target.value as WorkMode)}
+                    disabled={!canCheckIn || checkInMutation.isPending}
+                  >
+                    <option value="WFH">WFH</option>
+                    <option value="OFFICE">Office</option>
+                    <option value="OTHER">Other</option>
+                  </Select>
+                </div>
+                <Button onClick={handleCheckIn} disabled={!canCheckIn || checkInMutation.isPending || checkOutMutation.isPending} className="gap-2">
+                  <LogIn className="h-4 w-4" />
+                  {checkInMutation.isPending ? 'Checking In...' : 'Check In'}
+                </Button>
+                <Button onClick={handleCheckOut} disabled={!canCheckOut || checkInMutation.isPending || checkOutMutation.isPending} variant="outline" className="gap-2">
+                  <LogOut className="h-4 w-4" />
+                  {checkOutMutation.isPending ? 'Checking Out...' : 'Check Out'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-2xl">Current summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl border p-4">
+                <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+                  <Clock3 className="h-4 w-4" />
+                  <span className="text-sm font-medium">Live status</span>
+                </div>
+                <p className="text-lg font-semibold">
+                  {isCheckedIn
+                    ? `Working from ${workModeLabels[todayAttendance!.workMode]}`
+                    : todayAttendance?.checkOutAt
+                      ? 'Attendance completed for today'
+                      : 'You have not checked in yet'}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {todayAttendance
+                    ? `Started at ${formatDateTime(todayAttendance.checkInAt)}`
+                    : 'Use the selector to mark whether you are in WFH, Office, or Other mode.'}
+                </p>
+              </div>
+
+              <div className="rounded-xl border p-4">
+                <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+                  <TimerReset className="h-4 w-4" />
+                  <span className="text-sm font-medium">Duration</span>
+                </div>
+                <p className="text-lg font-semibold">
+                  {todayAttendance?.workingHours != null
+                    ? formatWorkedHours(todayAttendance.workingHours)
+                    : todayAttendance
+                      ? formatDuration(todayAttendance.checkInAt, todayAttendance.checkOutAt)
+                      : '--'}
+                </p>
+                {todayAttendance?.overtimeMinutes && todayAttendance.overtimeMinutes > 0 ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Overtime: {formatOvertime(todayAttendance.overtimeMinutes)} {todayAttendance.overtimeStatus ? `(${overtimeStatusLabels[todayAttendance.overtimeStatus]})` : ''}
+                  </p>
+                ) : null}
+                {todayAttendance?.remarks ? (
+                  <p className="mt-2 text-xs text-muted-foreground">Remarks: {todayAttendance.remarks}</p>
+                ) : null}
+                {todayAttendance?.manualCorrectedAt ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Manually corrected on {formatDateTime(todayAttendance.manualCorrectedAt)}
+                  </p>
+                ) : null}
+              </div>
+              <div className="rounded-xl border p-4">
+                <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+                  <Clock3 className="h-4 w-4" />
+                  <span className="text-sm font-medium">Attendance Status</span>
+                </div>
+                <p className="text-lg font-semibold">{todayStatus ? attendanceDayStatusLabels[todayStatus] : '--'}</p>
+                {data?.rules && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Late after {data.rules.lateAfter} · Half day after {data.rules.halfDayAfter} or below {data.rules.halfDayMinWorkingHours} hrs
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
         <Card className="border-primary/10 shadow-sm">
           <CardHeader className="pb-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-2xl">Today&apos;s attendance</CardTitle>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-              </div>
-              <Badge variant={isCheckedIn ? 'success' : todayAttendance?.checkOutAt ? 'default' : 'warning'}>
-                {isCheckedIn ? 'Checked In' : todayAttendance?.checkOutAt ? 'Checked Out' : 'Not Checked In'}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-xl border bg-background/70 p-4">
-                <div className="mb-3 flex items-center gap-2 text-muted-foreground">
-                  <Building2 className="h-4 w-4" />
-                  <span className="text-sm font-medium">Work Mode</span>
-                </div>
-                <p className="text-2xl font-semibold">
-                  {!isAttendanceRequired ? 'Exempt' : todayAttendance ? workModeLabels[todayAttendance.workMode] : 'Not selected'}
-                </p>
-              </div>
-              <div className="rounded-xl border bg-background/70 p-4">
-                <div className="mb-3 flex items-center gap-2 text-muted-foreground">
-                  <LogIn className="h-4 w-4" />
-                  <span className="text-sm font-medium">Check In</span>
-                </div>
-                <p className="text-2xl font-semibold">{formatTime(todayAttendance?.checkInAt)}</p>
-              </div>
-              <div className="rounded-xl border bg-background/70 p-4">
-                <div className="mb-3 flex items-center gap-2 text-muted-foreground">
-                  <LogOut className="h-4 w-4" />
-                  <span className="text-sm font-medium">Check Out</span>
-                </div>
-                <p className="text-2xl font-semibold">{formatTime(todayAttendance?.checkOutAt)}</p>
-              </div>
-            </div>
-
-            <div className="grid gap-4 rounded-xl border border-dashed p-4 md:grid-cols-[1fr,auto,auto] md:items-end">
-              <div className="space-y-2">
-                <Label htmlFor="work-mode">Select work mode</Label>
-                <Select
-                  id="work-mode"
-                  value={todayAttendance?.workMode ?? selectedMode}
-                  onChange={(event) => setSelectedMode(event.target.value as WorkMode)}
-                  disabled={!canCheckIn || checkInMutation.isPending}
-                >
-                  <option value="WFH">WFH</option>
-                  <option value="OFFICE">Office</option>
-                  <option value="OTHER">Other</option>
-                </Select>
-              </div>
-              <Button onClick={handleCheckIn} disabled={!canCheckIn || checkInMutation.isPending || checkOutMutation.isPending} className="gap-2">
-                <LogIn className="h-4 w-4" />
-                {checkInMutation.isPending ? 'Checking In...' : 'Check In'}
-              </Button>
-              <Button onClick={handleCheckOut} disabled={!canCheckOut || checkInMutation.isPending || checkOutMutation.isPending} variant="outline" className="gap-2">
-                <LogOut className="h-4 w-4" />
-                {checkOutMutation.isPending ? 'Checking Out...' : 'Check Out'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-2xl">Current summary</CardTitle>
+            <CardTitle className="text-2xl">Attendance Admin Overview</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-xl border p-4">
-              <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-                <Clock3 className="h-4 w-4" />
-                <span className="text-sm font-medium">Live status</span>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-xl border bg-background/70 p-4">
+                <p className="text-sm text-muted-foreground">Monthly review</p>
+                <p className="mt-1 text-lg font-semibold">Available</p>
               </div>
-              <p className="text-lg font-semibold">
-                {isCheckedIn
-                  ? `Working from ${workModeLabels[todayAttendance!.workMode]}`
-                  : !isAttendanceRequired
-                    ? 'Super Admin does not need attendance marking'
-                  : todayAttendance?.checkOutAt
-                    ? 'Attendance completed for today'
-                    : 'You have not checked in yet'}
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {todayAttendance
-                  ? `Started at ${formatDateTime(todayAttendance.checkInAt)}`
-                  : !isAttendanceRequired
-                    ? 'You can still review monthly attendance records from the panel.'
-                  : 'Use the selector to mark whether you are in WFH, Office, or Other mode.'}
-              </p>
-            </div>
-
-            <div className="rounded-xl border p-4">
-              <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-                <TimerReset className="h-4 w-4" />
-                <span className="text-sm font-medium">Duration</span>
+              <div className="rounded-xl border bg-background/70 p-4">
+                <p className="text-sm text-muted-foreground">Manual correction</p>
+                <p className="mt-1 text-lg font-semibold">{canManageManualCorrections ? 'Available' : 'Restricted'}</p>
               </div>
-              <p className="text-lg font-semibold">
-                {todayAttendance?.workingHours != null
-                  ? formatWorkedHours(todayAttendance.workingHours)
-                : todayAttendance
-                  ? formatDuration(todayAttendance.checkInAt, todayAttendance.checkOutAt)
-                  : '--'}
-              </p>
-              {todayAttendance?.overtimeMinutes && todayAttendance.overtimeMinutes > 0 ? (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Overtime: {formatOvertime(todayAttendance.overtimeMinutes)} {todayAttendance.overtimeStatus ? `(${overtimeStatusLabels[todayAttendance.overtimeStatus]})` : ''}
-                </p>
-              ) : null}
-              {todayAttendance?.remarks ? (
-                <p className="mt-2 text-xs text-muted-foreground">Remarks: {todayAttendance.remarks}</p>
-              ) : null}
-              {todayAttendance?.manualCorrectedAt ? (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Manually corrected on {formatDateTime(todayAttendance.manualCorrectedAt)}
-                </p>
-              ) : null}
-            </div>
-            <div className="rounded-xl border p-4">
-              <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-                <Clock3 className="h-4 w-4" />
-                <span className="text-sm font-medium">Attendance Status</span>
+              <div className="rounded-xl border bg-background/70 p-4">
+                <p className="text-sm text-muted-foreground">Holiday management</p>
+                <p className="mt-1 text-lg font-semibold">{canManageHolidays ? 'Available' : 'Restricted'}</p>
               </div>
-              <p className="text-lg font-semibold">{todayStatus ? attendanceDayStatusLabels[todayStatus] : '--'}</p>
-              {data?.rules && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Late after {data.rules.lateAfter} · Half day after {data.rules.halfDayAfter} or below {data.rules.halfDayMinWorkingHours} hrs
-                </p>
-              )}
             </div>
           </CardContent>
         </Card>
-      </div>
+      )}
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">Recent attendance history</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="border-b text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Mode</th>
-                  <th className="px-4 py-3 font-medium">Check In</th>
-                  <th className="px-4 py-3 font-medium">Check Out</th>
-                  <th className="px-4 py-3 font-medium">Duration</th>
-                  <th className="px-4 py-3 font-medium">Overtime</th>
-                  <th className="px-4 py-3 font-medium">Remarks</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {attendanceHistory.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
-                      No attendance has been recorded yet.
-                    </td>
-                  </tr>
-                ) : (
-                  attendanceHistory.map((record) => (
-                    <tr key={record.id} className="hover:bg-muted/40">
-                      <td className="px-4 py-4">{new Date(record.checkInAt).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                      <td className="px-4 py-4">{workModeLabels[record.workMode]}</td>
-                      <td className="px-4 py-4">{formatDateTime(record.checkInAt)}</td>
-                      <td className="px-4 py-4">{formatDateTime(record.checkOutAt)}</td>
-                      <td className="px-4 py-4">
-                        {record.workingHours != null
-                          ? formatWorkedHours(record.workingHours)
-                          : formatDuration(record.checkInAt, record.checkOutAt)}
-                      </td>
-                      <td className="px-4 py-4">
-                        {record.overtimeMinutes && record.overtimeMinutes > 0
-                          ? `${formatOvertime(record.overtimeMinutes)}${record.overtimeStatus ? ` (${overtimeStatusLabels[record.overtimeStatus]})` : ''}`
-                          : '--'}
-                      </td>
-                      <td className="px-4 py-4 text-xs text-muted-foreground">
-                        {record.remarks || record.manualCorrectionReason ? (
-                          <div className="space-y-1">
-                            {record.remarks ? <p>{record.remarks}</p> : null}
-                            {record.manualCorrectionReason ? <p>Correction: {record.manualCorrectionReason}</p> : null}
-                          </div>
-                        ) : (
-                          '--'
-                        )}
-                      </td>
-                      <td className="px-4 py-4">
-                        <Badge
-                          variant={
-                            record.dayStatus === 'HALF_DAY'
-                              ? 'destructive'
-                              : record.dayStatus === 'LATE'
-                                ? 'warning'
-                                : record.checkOutAt
-                                  ? 'default'
-                                  : 'success'
-                          }
-                        >
-                          {record.dayStatus
-                            ? attendanceDayStatusLabels[record.dayStatus]
-                            : record.checkOutAt
-                              ? 'Closed'
-                              : 'Active'}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 xl:grid-cols-2">
+      {isAttendanceRequired && (
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="text-2xl">My regularization requests</CardTitle>
+            <CardTitle className="text-2xl">Recent attendance history</CardTitle>
           </CardHeader>
           <CardContent>
-            {isRegularizationLoading ? (
-              <div className="py-8 text-sm text-muted-foreground">Loading requests...</div>
-            ) : myRegularizations.length === 0 ? (
-              <div className="py-8 text-sm text-muted-foreground">No regularization requests submitted yet.</div>
-            ) : (
-              <div className="space-y-3">
-                {myRegularizations.map((request) => (
-                  <div key={request.id} className="rounded-xl border p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium">{regularizationTypeLabels[request.type]}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(request.attendanceDate).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </p>
-                      </div>
-                      <Badge
-                        variant={
-                          request.status === 'APPROVED'
-                            ? 'success'
-                            : request.status === 'REJECTED'
-                              ? 'destructive'
-                              : 'warning'
-                        }
-                      >
-                        {request.status}
-                      </Badge>
-                    </div>
-                    <p className="mt-3 text-sm text-muted-foreground">{request.reason}</p>
-                    <div className="mt-3 text-xs text-muted-foreground">
-                      Requested:
-                      {' '}
-                      {request.requestedCheckInAt ? `IN ${formatTime(request.requestedCheckInAt)} ` : ''}
-                      {request.requestedCheckOutAt ? `OUT ${formatTime(request.requestedCheckOutAt)} ` : ''}
-                      {request.requestedWorkMode ? workModeLabels[request.requestedWorkMode] : ''}
-                    </div>
-                    {request.reviewNotes && (
-                      <p className="mt-2 text-xs text-muted-foreground">Review note: {request.reviewNotes}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="border-b text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Date</th>
+                    <th className="px-4 py-3 font-medium">Mode</th>
+                    <th className="px-4 py-3 font-medium">Check In</th>
+                    <th className="px-4 py-3 font-medium">Check Out</th>
+                    <th className="px-4 py-3 font-medium">Duration</th>
+                    <th className="px-4 py-3 font-medium">Overtime</th>
+                    <th className="px-4 py-3 font-medium">Remarks</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {attendanceHistory.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                        No attendance has been recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    attendanceHistory.map((record) => (
+                      <tr key={record.id} className="hover:bg-muted/40">
+                        <td className="px-4 py-4">{new Date(record.checkInAt).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                        <td className="px-4 py-4">{workModeLabels[record.workMode]}</td>
+                        <td className="px-4 py-4">{formatDateTime(record.checkInAt)}</td>
+                        <td className="px-4 py-4">{formatDateTime(record.checkOutAt)}</td>
+                        <td className="px-4 py-4">
+                          {record.workingHours != null
+                            ? formatWorkedHours(record.workingHours)
+                            : formatDuration(record.checkInAt, record.checkOutAt)}
+                        </td>
+                        <td className="px-4 py-4">
+                          {record.overtimeMinutes && record.overtimeMinutes > 0
+                            ? `${formatOvertime(record.overtimeMinutes)}${record.overtimeStatus ? ` (${overtimeStatusLabels[record.overtimeStatus]})` : ''}`
+                            : '--'}
+                        </td>
+                        <td className="px-4 py-4 text-xs text-muted-foreground">
+                          {record.remarks || record.manualCorrectionReason ? (
+                            <div className="space-y-1">
+                              {record.remarks ? <p>{record.remarks}</p> : null}
+                              {record.manualCorrectionReason ? <p>Correction: {record.manualCorrectionReason}</p> : null}
+                            </div>
+                          ) : (
+                            '--'
+                          )}
+                        </td>
+                        <td className="px-4 py-4">
+                          <Badge
+                            variant={
+                              record.dayStatus === 'HALF_DAY'
+                                ? 'destructive'
+                                : record.dayStatus === 'LATE'
+                                  ? 'warning'
+                                  : record.checkOutAt
+                                    ? 'default'
+                                    : 'success'
+                            }
+                          >
+                            {record.dayStatus
+                              ? attendanceDayStatusLabels[record.dayStatus]
+                              : record.checkOutAt
+                                ? 'Closed'
+                                : 'Active'}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
+      )}
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        {isAttendanceRequired && (
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-2xl">My regularization requests</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isRegularizationLoading ? (
+                <div className="py-8 text-sm text-muted-foreground">Loading requests...</div>
+              ) : myRegularizations.length === 0 ? (
+                <div className="py-8 text-sm text-muted-foreground">No regularization requests submitted yet.</div>
+              ) : (
+                <div className="space-y-3">
+                  {myRegularizations.map((request) => (
+                    <div key={request.id} className="rounded-xl border p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium">{regularizationTypeLabels[request.type]}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(request.attendanceDate).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={
+                            request.status === 'APPROVED'
+                              ? 'success'
+                              : request.status === 'REJECTED'
+                                ? 'destructive'
+                                : 'warning'
+                          }
+                        >
+                          {request.status}
+                        </Badge>
+                      </div>
+                      <p className="mt-3 text-sm text-muted-foreground">{request.reason}</p>
+                      <div className="mt-3 text-xs text-muted-foreground">
+                        Requested:
+                        {' '}
+                        {request.requestedCheckInAt ? `IN ${formatTime(request.requestedCheckInAt)} ` : ''}
+                        {request.requestedCheckOutAt ? `OUT ${formatTime(request.requestedCheckOutAt)} ` : ''}
+                        {request.requestedWorkMode ? workModeLabels[request.requestedWorkMode] : ''}
+                      </div>
+                      {request.reviewNotes && (
+                        <p className="mt-2 text-xs text-muted-foreground">Review note: {request.reviewNotes}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {canReviewOtherAttendance && (
           <Card className="shadow-sm">
@@ -1116,9 +1139,8 @@ export function AttendancePage() {
           onClick={() => setIsDrawerOpen(false)}
         />
         <aside
-          className={`absolute right-0 top-0 h-full w-full max-w-2xl overflow-y-auto border-l bg-white shadow-2xl transition-transform duration-300 dark:bg-zinc-950 dark:border-zinc-800 ${
-            isDrawerOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
+          className={`absolute right-0 top-0 h-full w-full max-w-2xl overflow-y-auto border-l bg-white shadow-2xl transition-transform duration-300 dark:bg-zinc-950 dark:border-zinc-800 ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'
+            }`}
         >
           <div className="sticky top-0 z-10 border-b bg-white/95 px-6 py-4 backdrop-blur dark:bg-zinc-950/95 dark:border-zinc-800">
             <div className="flex items-start justify-between gap-4">
@@ -1308,19 +1330,18 @@ export function AttendancePage() {
                     <div
                       key={day.date}
                       style={index === 0 ? { gridColumnStart: monthlyCalendarStartColumn } : undefined}
-                      className={`rounded-2xl border p-3 text-center transition-colors ${
-                        day.status === 'PRESENT'
-                          ? day.dayStatus === 'HALF_DAY'
-                            ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300'
-                            : day.dayStatus === 'LATE'
-                              ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300'
-                              : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
-                          : day.status === 'HOLIDAY'
-                            ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300'
-                            : day.status === 'WEEKLY_OFF'
-                              ? 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300'
-                              : 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400'
-                      }`}
+                      className={`rounded-2xl border p-3 text-center transition-colors ${day.status === 'PRESENT'
+                        ? day.dayStatus === 'HALF_DAY'
+                          ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300'
+                          : day.dayStatus === 'LATE'
+                            ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300'
+                            : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
+                        : day.status === 'HOLIDAY'
+                          ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300'
+                          : day.status === 'WEEKLY_OFF'
+                            ? 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300'
+                            : 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400'
+                        }`}
                       title={getMonthlyAttendanceTitle(day)}
                     >
                       <div className="text-xs font-medium">{day.day}</div>
