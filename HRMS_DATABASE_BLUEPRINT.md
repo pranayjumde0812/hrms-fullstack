@@ -50,6 +50,9 @@ Reason:
 ### Well aligned with current roadmap
 - `[x]` `User`
 - `[x]` `Department`
+- `[x]` `WorkLocation`
+- `[x]` `AttendancePolicy`
+- `[x]` `WeeklyOffRule`
 - `[x]` `Holiday`
 - `[x]` `Attendance`
 - `[x]` `AttendanceRegularization`
@@ -61,19 +64,13 @@ Reason:
 ### Partially aligned and should be upgraded
 - `[~]` `Leave`
 - `[~]` `Payroll`
-- `[~]` `User` for employee master fields
-- `[~]` `Holiday` for location / policy applicability
-- `[~]` `Attendance` for policy source, auditability, and payroll-readiness
+- `[~]` `Attendance` for auditability completion and payroll-readiness
 
 ### Not yet modeled but needed by roadmap
-- `[ ]` Attendance policy master
-- `[ ]` Weekly-off configuration
-- `[ ]` Work location / branch / legal entity
-- `[ ]` Employee lifecycle and employment type
 - `[ ]` Leave type master
 - `[ ]` Leave policy master
 - `[ ]` Leave balance ledger
-- `[ ]` Attendance audit log
+- `[~]` Attendance audit log
 - `[ ]` Payroll run / payroll item breakdown
 
 ## My Call
@@ -92,7 +89,7 @@ That is the safest and most industry-correct path for this codebase.
 
 ### 1. User
 
-Current status: `[~]`
+Current status: `[x]`
 
 Current model is a good start because it already supports:
 - login identity
@@ -101,14 +98,14 @@ Current model is a good start because it already supports:
 - manager mapping
 - salary placeholders
 
-But it is still missing important employee master fields:
+The important employee master fields are now present:
 - employee code
 - lifecycle status
 - employment type
 - work location
 - timezone
 - designation
-- date of exit / last working day
+- exit date
 
 Recommended target:
 - keep `User` as the employee master
@@ -126,12 +123,14 @@ Recommended extension later:
 
 ### 3. Holiday
 
-Current status: `[~]`
+Current status: `[x]`
 
-Current model works for a simple company-wide holiday list.
+Current model now supports:
+- company-wide holidays
+- optional work-location applicability
+- optional holiday flag
 
 It should later support:
-- optional work location applicability
 - holiday type
 - optional restricted holiday flag
 
@@ -148,10 +147,9 @@ Current model is strong for a first version:
 - manual correction metadata
 
 But for the roadmap it still needs:
-- source of attendance entry
 - link to attendance policy used
 - stronger final status semantics for payroll
-- audit history for changes
+- audit history for changes is only partially implemented in code today
 - shift / weekly-off awareness later
 
 ### 5. Attendance Regularization
@@ -497,13 +495,14 @@ This is the recommended target structure to build toward.
 This is the safest path to update the real schema.
 
 ### Stage 1: Safe extensions to current base
-- add employee master fields to `User`
-- replace implicit project join with explicit `UserProjectAssignment`
-- add `WorkLocation`
-- add `AttendancePolicy`
-- add `WeeklyOffRule`
-- extend `Holiday` with optional location applicability
-- add attendance source enum and audit log table
+- `[x]` add employee master fields to `User`
+- `[x]` replace implicit project join with explicit `UserProjectAssignment`
+- `[x]` add `WorkLocation`
+- `[x]` add `AttendancePolicy`
+- `[x]` add `WeeklyOffRule`
+- `[x]` extend `Holiday` with optional location applicability
+- `[x]` add attendance source enum and audit log table
+- `[~]` wire attendance audit log writes into all change flows
 
 ### Stage 2: Refactor leave properly
 - replace plain leave strings with enums or master references
@@ -553,3 +552,32 @@ Best approach:
 - implement schema changes in controlled phases
 
 This is better than rebuilding the full DB immediately.
+
+## Stability Checkpoint
+
+Current phase status:
+- Attendance master schema changes are applied through Prisma migrations
+- Frontend admin screens exist for work locations, attendance policies, weekly-off rules, employee master fields, and holiday master updates
+- Backend and frontend were smoke-tested together on a running local server
+- One runtime mismatch in weekly-off rule creation was fixed during smoke testing
+
+This means the attendance-master phase is stable enough to treat as the baseline before starting the leave foundation.
+
+## Next Starting Point
+
+Use this as the database handoff note for the next chat thread.
+
+- Current stable DB baseline: attendance-master schema is in place and verified
+- Migration-first workflow remains mandatory for all future DB changes
+- Next schema work should start from leave foundation, not from more attendance UI polish
+
+Next DB build order:
+1. `[ ]` `LeaveType`
+2. `[ ]` `LeavePolicy`
+3. `[ ]` `LeaveBalanceLedger`
+4. `[ ]` Refactor current `Leave` model toward a proper request/approval structure
+
+Instruction for the next thread:
+- Read this blueprint and the roadmap first
+- Keep current attendance-master tables as baseline
+- Implement leave foundation through Prisma migrations, then update services, validators, and frontend

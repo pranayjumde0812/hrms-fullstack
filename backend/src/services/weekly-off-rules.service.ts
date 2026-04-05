@@ -24,9 +24,11 @@ export const createWeeklyOffRule = async (data: {
   effectiveTo?: Date;
 }) => {
   await validateWorkLocation(data.workLocationId);
+  const { workLocationId, ...rest } = data;
+
   return weeklyOffRulesRepository.createWeeklyOffRule({
-    ...data,
-    workLocation: data.workLocationId != null ? { connect: { id: data.workLocationId } } : undefined,
+    ...rest,
+    workLocation: workLocationId != null ? { connect: { id: workLocationId } } : undefined,
   });
 };
 
@@ -48,15 +50,16 @@ export const updateWeeklyOffRule = async (
   }
 
   await validateWorkLocation(data.workLocationId);
+  const { workLocationId, ...rest } = data;
 
   return weeklyOffRulesRepository.updateWeeklyOffRule(id, {
-    ...data,
+    ...rest,
     workLocation:
-      data.workLocationId === undefined
+      workLocationId === undefined
         ? undefined
-        : data.workLocationId === null
+        : workLocationId === null
           ? { disconnect: true }
-          : { connect: { id: data.workLocationId } },
+          : { connect: { id: workLocationId } },
   });
 };
 

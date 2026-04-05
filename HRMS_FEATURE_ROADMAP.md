@@ -95,11 +95,11 @@ These should be treated as shared foundations, not isolated features:
 - `[x]` Overtime tracking and approval
 - `[x]` Attendance remarks and manual HR correction
 - `[x]` Holiday and weekly-off attendance handling
-- `[ ]` Attendance policy configuration: office start time, grace time, half-day threshold, standard hours
+- `[x]` Attendance policy configuration: office start time, grace time, half-day threshold, standard hours
 - `[ ]` Employee timezone and company timezone handling
 - `[ ]` Missing attendance / absent auto-marking job after day close
-- `[ ]` Attendance source tagging: web, manual correction, regularization, import
-- `[ ]` Attendance audit trail for every status or time change
+- `[x]` Attendance source tagging: web, manual correction, regularization, import
+- `[~]` Attendance audit trail for every status or time change
 
 ### 2. Manager attendance workflow
 - `[x]` Reporting manager mapping
@@ -139,10 +139,10 @@ These should be treated as shared foundations, not isolated features:
 - `[ ]` Reporting hierarchy
 - `[ ]` Department heads and team ownership
 - `[ ]` Employee transfer between departments
-- `[ ]` Employee lifecycle status: active, probation, notice, exited
+- `[x]` Employee lifecycle status: active, probation, notice, exited
 - `[ ]` Employee skill tags and designations
-- `[ ]` Employment type: full-time, intern, contractor, consultant
-- `[ ]` Work location / branch / legal entity tagging
+- `[x]` Employment type: full-time, intern, contractor, consultant
+- `[x]` Work location / branch / legal entity tagging
 
 ### 6. Manager dashboard
 - `[ ]` Team on leave today
@@ -235,14 +235,14 @@ Build these first for the fastest jump in real-world usability:
 1. `[x]` Reporting manager mapping
 2. `[x]` Attendance regularization request
 3. `[x]` Attendance approval flow
-4. `[ ]` Attendance policy configuration
+4. `[x]` Attendance policy configuration
 5. `[ ]` Missing attendance / absent auto-marking job
 6. `[ ]` Leave policy master and balance ledger
 7. `[ ]` Leave request and approval workflow
 8. `[ ]` Holiday calendar
 9. `[x]` Late mark / half-day / overtime rules
 10. `[ ]` Attendance to payroll integration
-11. `[ ]` Employee lifecycle status and employment type
+11. `[x]` Employee lifecycle status and employment type
 12. `[ ]` Employee self-service profile and documents
 13. `[ ]` Manager dashboard
 
@@ -256,20 +256,20 @@ This sequence takes the current product state into account and should be followe
 - `[x]` Attendance approval by manager / HR
 - `[x]` Late mark / half-day / overtime
 - `[x]` Holiday master and weekly-off handling
-- `[ ]` Attendance policy settings
+- `[x]` Attendance policy settings
 - `[ ]` Manager can review only direct or delegated reports
 - `[ ]` Approval fallback when reporting manager is missing
 - `[ ]` Absent auto-marking
-- `[ ]` Attendance source tagging
-- `[ ]` Attendance audit trail
+- `[x]` Attendance source tagging
+- `[~]` Attendance audit trail
 - `[ ]` Employee timezone and company timezone handling
 
 ### Phase 1B: Build shared HR masters
-- `[ ]` Holiday calendar as shared master for attendance, leave, and payroll
-- `[ ]` Weekly-off configuration by company, location, shift, or employee
-- `[ ]` Employee lifecycle status
-- `[ ]` Employment type
-- `[ ]` Work location / branch / legal entity tagging
+- `[~]` Holiday calendar as shared master for attendance, leave, and payroll
+- `[x]` Weekly-off configuration by company, location, shift, or employee
+- `[x]` Employee lifecycle status
+- `[x]` Employment type
+- `[x]` Work location / branch / legal entity tagging
 - `[ ]` Reporting hierarchy cleanup
 - `[ ]` Department heads and team ownership
 
@@ -307,14 +307,36 @@ This sequence takes the current product state into account and should be followe
 
 If we continue from the current codebase, build these next without skipping:
 
-1. `[ ]` Attendance policy settings
+1. `[x]` Attendance policy settings
 2. `[ ]` Absent auto-marking
 3. `[ ]` Manager review scope and approval fallback
 4. `[ ]` Holiday calendar and weekly-off configuration as shared master
-5. `[ ]` Employee lifecycle + employment type + work location basics
+5. `[x]` Employee lifecycle + employment type + work location basics
 6. `[ ]` Leave policy master
 7. `[ ]` Leave balance ledger
 8. `[ ]` Leave request and approval workflow
+
+## Next Starting Point
+
+Use this section as the handoff note for the next chat thread.
+
+- Current stable baseline: attendance-master phase is completed and smoke-tested
+- Frontend and backend are aligned for work locations, attendance policies, weekly-off rules, holiday master updates, and employee master fields
+- Current phase should be treated as frozen unless a bug is found
+
+Next module to start:
+- Leave Foundation
+
+Build order for the next thread:
+1. `[ ]` `LeaveType`
+2. `[ ]` `LeavePolicy`
+3. `[ ]` `LeaveBalanceLedger`
+4. `[ ]` Refactor current leave request flow into policy-based approval flow
+
+Instruction for the next thread:
+- Read `HRMS_FEATURE_ROADMAP.md` and `HRMS_DATABASE_BLUEPRINT.md` first
+- Treat attendance-master work as stable baseline
+- Start from leave database design and migration-first backend changes before frontend expansion
 
 ## Development Rule To Follow
 
@@ -337,6 +359,7 @@ Example for leave:
 ## Notes
 
 - Database changes should always follow Prisma migration files, not ad-hoc schema pushes.
+- Current attendance-master phase has been smoke-tested against a running backend after frontend wiring, and the weekly-off rule runtime mismatch was fixed.
 - `managerId` is now the correct base for reporting structure, which is closer to industry practice than relying only on `PROJECT_MANAGER`.
 - `PROJECT_MANAGER` should not be treated as the only manager role; approval authority should come from reporting structure and role permissions together.
 - Current roles are acceptable for Phase 1, but Phase 2 should likely add `ADMIN / HR_EXECUTIVE`, `TEAM_LEAD`, and possibly `FINANCE / PAYROLL`.
