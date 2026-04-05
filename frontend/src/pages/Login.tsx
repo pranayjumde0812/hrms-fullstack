@@ -76,9 +76,9 @@ export default function Login() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
-            
+
             <div className="pt-4 text-center text-xs text-muted-foreground">
-              Demo Instance: Use <strong>admin@nexushr.com</strong> to auto-provision an admin account upon first login attempt.
+              Demo Instance: Use <strong>admin@codersview.com</strong> to auto-provision an admin account upon first login attempt.
             </div>
           </form>
         </CardContent>

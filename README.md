@@ -46,7 +46,7 @@ yarn dev
 ## Accessing the Dashboard
 
 1. Open `http://localhost:5173/login`
-2. **Auto-Provisioning:** Enter `admin@nexushr.com` and any password with > 6 characters. The backend is configured to automatically provision the *first* attempt as a `SUPER_ADMIN` account on an empty system.
+2. **Auto-Provisioning:** Enter `admin@codersview.com` and any password with > 6 characters. The backend is configured to automatically provision the *first* attempt as a `SUPER_ADMIN` account on an empty system.
 
 ## Architecture Highlights
 - **RBAC:** Routes and API endpoints are natively protected across four roles (`SUPER_ADMIN`, `HR_MANAGER`, `PROJECT_MANAGER`, `EMPLOYEE`).

@@ -1,7 +1,7 @@
 import prisma from './prisma';
 
 const DEFAULT_SUPER_ADMIN = {
-  email: 'admin@nexushr.com',
+  email: 'admin@codersview.com',
   password: 'admin123',
   firstName: 'Super',
   lastName: 'Admin',
