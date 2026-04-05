@@ -2,6 +2,7 @@ import * as attendanceService from './attendance.service';
 import * as authService from './auth.service';
 import * as dashboardService from './dashboard.service';
 import * as departmentsService from './departments.service';
+import * as holidaysService from './holidays.service';
 import * as leavesService from './leaves.service';
 import * as payrollService from './payroll.service';
 import * as projectsService from './projects.service';
@@ -13,6 +14,7 @@ export {
   authService,
   dashboardService,
   departmentsService,
+  holidaysService,
   leavesService,
   payrollService,
   projectsService,

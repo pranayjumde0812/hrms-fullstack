@@ -29,11 +29,25 @@ type AttendanceOverview = {
   today: AttendanceRecord | null;
   history: AttendanceRecord[];
   isAttendanceRequired: boolean;
+  todayClassification?: 'PRESENT' | 'HOLIDAY' | 'WEEKLY_OFF' | 'WORKING_DAY';
+  todayHoliday?: {
+    id: number;
+    name: string;
+    holidayDate: string;
+    description?: string | null;
+  } | null;
   rules?: {
     lateAfter: string;
     halfDayAfter: string;
     halfDayMinWorkingHours: number;
   };
+};
+
+type Holiday = {
+  id: number;
+  name: string;
+  holidayDate: string;
+  description?: string | null;
 };
 
 type RegularizationType =
@@ -123,11 +137,13 @@ type MonthlyAttendance = {
     lateDays: number;
     halfDays: number;
     absentDays: number;
+    holidayDays: number;
+    weeklyOffDays: number;
   };
   days: Array<{
     day: number;
     date: string;
-    status: 'PRESENT' | 'ABSENT';
+    status: 'PRESENT' | 'ABSENT' | 'HOLIDAY' | 'WEEKLY_OFF';
     dayStatus: 'PRESENT' | 'LATE' | 'HALF_DAY' | null;
     lateMark: boolean;
     workingHours: number | null;
@@ -137,6 +153,7 @@ type MonthlyAttendance = {
     remarks: string | null;
     manualCorrectionReason: string | null;
     manualCorrectedAt: string | null;
+    holidayName: string | null;
   }>;
 };
 
@@ -164,6 +181,29 @@ const overtimeStatusLabels = {
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
 } as const;
+
+const calendarDayLabels = {
+  HOLIDAY: 'Holiday',
+  WEEKLY_OFF: 'Weekly Off',
+} as const;
+
+const calendarWeekdayHeaders = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
+
+const getMonthlyAttendanceTitle = (day: MonthlyAttendance['days'][number]) => {
+  if (day.status === 'PRESENT') {
+    return day.dayStatus ? attendanceDayStatusLabels[day.dayStatus] : 'Present';
+  }
+
+  if (day.status === 'HOLIDAY') {
+    return day.holidayName ? `Holiday - ${day.holidayName}` : 'Holiday';
+  }
+
+  if (day.status === 'WEEKLY_OFF') {
+    return 'Weekly Off';
+  }
+
+  return 'A';
+};
 
 const formatDateTime = (value?: string | null) => {
   if (!value) {
@@ -234,6 +274,7 @@ export function AttendancePage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isRegularizationModalOpen, setIsRegularizationModalOpen] = useState(false);
   const [isManualCorrectionModalOpen, setIsManualCorrectionModalOpen] = useState(false);
+  const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
   const [reviewingRequest, setReviewingRequest] = useState<AttendanceRegularization | null>(null);
   const [reviewingOvertime, setReviewingOvertime] = useState<AttendanceOvertimeRequest | null>(null);
   const [selectedMonthNumber, setSelectedMonthNumber] = useState(() => new Date().getMonth() + 1);
@@ -257,9 +298,15 @@ export function AttendancePage() {
     remarks: '',
     correctionReason: '',
   });
+  const [holidayForm, setHolidayForm] = useState({
+    name: '',
+    holidayDate: new Date().toISOString().split('T')[0],
+    description: '',
+  });
 
   const canReviewOtherAttendance = user ? ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER'].includes(user.role) : false;
   const canManageManualCorrections = user ? ['SUPER_ADMIN', 'HR_MANAGER'].includes(user.role) : false;
+  const canManageHolidays = user ? ['SUPER_ADMIN', 'HR_MANAGER'].includes(user.role) : false;
 
   const { data, isLoading } = useQuery({
     queryKey: ['attendance'],
@@ -290,6 +337,20 @@ export function AttendancePage() {
               overtimeRequests: AttendanceOvertimeRequest[];
             },
         ),
+    enabled: !!user,
+  });
+
+  const { data: holidays = [] } = useQuery({
+    queryKey: ['holidays', selectedMonthNumber, selectedYearNumber],
+    queryFn: () =>
+      api
+        .get('/holidays', {
+          params: {
+            month: selectedMonthNumber,
+            year: selectedYearNumber,
+          },
+        })
+        .then((res: any) => res.data as Holiday[]),
     enabled: !!user,
   });
 
@@ -331,6 +392,15 @@ export function AttendancePage() {
         .then((res: any) => res.data as MonthlyAttendance),
     enabled: !!user && !!targetUserId && isDrawerOpen,
   });
+
+  const monthlyCalendarStartColumn = useMemo(() => {
+    if (!monthlyAttendance?.days.length) {
+      return 1;
+    }
+
+    const firstDayOfMonth = new Date(monthlyAttendance.days[0].date).getDay();
+    return firstDayOfMonth === 0 ? 7 : firstDayOfMonth;
+  }, [monthlyAttendance]);
 
   const refreshAttendance = async () => {
     await Promise.all([
@@ -434,6 +504,31 @@ export function AttendancePage() {
     },
   });
 
+  const createHolidayMutation = useMutation({
+    mutationFn: async () =>
+      api.post('/holidays', {
+        ...holidayForm,
+        description: holidayForm.description || undefined,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['holidays'] });
+      await queryClient.invalidateQueries({ queryKey: ['attendance-monthly'] });
+      setHolidayForm({
+        name: '',
+        holidayDate: new Date().toISOString().split('T')[0],
+        description: '',
+      });
+    },
+  });
+
+  const deleteHolidayMutation = useMutation({
+    mutationFn: async (id: number) => api.delete(`/holidays/${id}`),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['holidays'] });
+      await queryClient.invalidateQueries({ queryKey: ['attendance-monthly'] });
+    },
+  });
+
   useEffect(() => {
     if (user && selectedUserId == null && attendanceUsers.length > 0) {
       setSelectedUserId(canReviewOtherAttendance ? user.id : attendanceUsers[0].id);
@@ -526,6 +621,26 @@ export function AttendancePage() {
     }
   };
 
+  const handleCreateHoliday = async () => {
+    try {
+      await createHolidayMutation.mutateAsync();
+      setFeedback({ type: 'success', message: 'Holiday added successfully.' });
+    } catch (error) {
+      const message = (error as any)?.response?.data?.message || 'Unable to create holiday.';
+      setFeedback({ type: 'error', message });
+    }
+  };
+
+  const handleDeleteHoliday = async (id: number) => {
+    try {
+      await deleteHolidayMutation.mutateAsync(id);
+      setFeedback({ type: 'success', message: 'Holiday deleted successfully.' });
+    } catch (error) {
+      const message = (error as any)?.response?.data?.message || 'Unable to delete holiday.';
+      setFeedback({ type: 'error', message });
+    }
+  };
+
   if (isLoading) {
     return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading attendance...</div>;
   }
@@ -555,6 +670,12 @@ export function AttendancePage() {
             Manual Correction
           </Button>
         )}
+        {canManageHolidays && (
+          <Button variant="outline" onClick={() => setIsHolidayModalOpen(true)} className="gap-2">
+            <CalendarDays className="h-4 w-4" />
+            Manage Holidays
+          </Button>
+        )}
         {canReviewOtherAttendance && pendingReviewCount > 0 && (
           <Badge variant="warning">{pendingReviewCount} pending regularization review{pendingReviewCount > 1 ? 's' : ''}</Badge>
         )}
@@ -563,6 +684,12 @@ export function AttendancePage() {
         )}
         {!isAttendanceRequired && (
           <Badge variant="warning">Super Admin is exempt from daily check-in</Badge>
+        )}
+        {data?.todayClassification === 'HOLIDAY' && data.todayHoliday && (
+          <Badge variant="warning">Today is a holiday: {data.todayHoliday.name}</Badge>
+        )}
+        {data?.todayClassification === 'WEEKLY_OFF' && (
+          <Badge variant="warning">Today is a weekly off</Badge>
         )}
       </div>
 
@@ -1040,6 +1167,40 @@ export function AttendancePage() {
               </div>
             </div>
 
+            <div className="rounded-2xl border bg-zinc-50 p-5 dark:bg-zinc-900/60 dark:border-zinc-800">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-lg font-semibold">Holidays this month</h4>
+                  <p className="text-sm text-muted-foreground">Configured holidays are excluded from absence counts.</p>
+                </div>
+                {canManageHolidays ? (
+                  <Button variant="outline" onClick={() => setIsHolidayModalOpen(true)}>Add Holiday</Button>
+                ) : null}
+              </div>
+              <div className="mt-4 space-y-3">
+                {holidays.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No holidays configured for this month.</div>
+                ) : (
+                  holidays.map((holiday) => (
+                    <div key={holiday.id} className="flex items-center justify-between gap-3 rounded-xl border bg-white p-4 dark:bg-zinc-950 dark:border-zinc-800">
+                      <div>
+                        <p className="font-medium">{holiday.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(holiday.holidayDate).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                        {holiday.description ? <p className="mt-1 text-xs text-muted-foreground">{holiday.description}</p> : null}
+                      </div>
+                      {canManageHolidays ? (
+                        <Button variant="outline" onClick={() => handleDeleteHoliday(holiday.id)} disabled={deleteHolidayMutation.isPending}>
+                          Delete
+                        </Button>
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
             {isMonthlyAttendanceLoading ? (
               <div className="flex h-48 items-center justify-center text-muted-foreground">Loading monthly attendance...</div>
             ) : monthlyAttendance ? (
@@ -1074,6 +1235,14 @@ export function AttendancePage() {
                       <p className="text-sm text-muted-foreground">Absent Days</p>
                       <p className="mt-1 text-2xl font-semibold">{monthlyAttendance.summary.absentDays}</p>
                     </div>
+                    <div className="rounded-xl border bg-white p-4 dark:bg-zinc-950 dark:border-zinc-800">
+                      <p className="text-sm text-muted-foreground">Holiday Days</p>
+                      <p className="mt-1 text-2xl font-semibold text-sky-600">{monthlyAttendance.summary.holidayDays}</p>
+                    </div>
+                    <div className="rounded-xl border bg-white p-4 dark:bg-zinc-950 dark:border-zinc-800">
+                      <p className="text-sm text-muted-foreground">Weekly Off Days</p>
+                      <p className="mt-1 text-2xl font-semibold text-violet-600">{monthlyAttendance.summary.weeklyOffDays}</p>
+                    </div>
                   </div>
                 </div>
 
@@ -1095,15 +1264,32 @@ export function AttendancePage() {
                     Absent
                   </div>
                   <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-sm bg-sky-500" />
+                    Holiday
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-sm bg-violet-500" />
+                    Weekly Off
+                  </div>
+                  <div className="flex items-center gap-2">
                     <span className="text-[10px] font-semibold uppercase tracking-wider">C</span>
                     Manually corrected
                   </div>
                 </div>
 
                 <div className="grid grid-cols-7 gap-3">
-                  {monthlyAttendance.days.map((day) => (
+                  {calendarWeekdayHeaders.map((weekday, index) => (
                     <div
-                      key={day.day}
+                      key={`${weekday}-${index}`}
+                      className="px-1 text-center text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground"
+                    >
+                      {weekday}
+                    </div>
+                  ))}
+                  {monthlyAttendance.days.map((day, index) => (
+                    <div
+                      key={day.date}
+                      style={index === 0 ? { gridColumnStart: monthlyCalendarStartColumn } : undefined}
                       className={`rounded-2xl border p-3 text-center transition-colors ${
                         day.status === 'PRESENT'
                           ? day.dayStatus === 'HALF_DAY'
@@ -1111,13 +1297,13 @@ export function AttendancePage() {
                             : day.dayStatus === 'LATE'
                               ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300'
                               : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
-                          : 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400'
+                          : day.status === 'HOLIDAY'
+                            ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300'
+                            : day.status === 'WEEKLY_OFF'
+                              ? 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300'
+                              : 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400'
                       }`}
-                      title={
-                        day.status === 'PRESENT'
-                          ? `${day.dayStatus ? attendanceDayStatusLabels[day.dayStatus] : 'Present'} • ${formatDateTime(day.checkInAt)} • ${day.workMode ? workModeLabels[day.workMode] : ''}`
-                          : 'Absent'
-                      }
+                      title={getMonthlyAttendanceTitle(day)}
                     >
                       <div className="text-xs font-medium">{day.day}</div>
                       <div className="mt-2 text-[10px] uppercase tracking-wider">
@@ -1129,7 +1315,11 @@ export function AttendancePage() {
                               : day.manualCorrectedAt
                                 ? 'C'
                                 : 'P'
-                          : 'A'}
+                          : day.status === 'HOLIDAY'
+                            ? 'H'
+                            : day.status === 'WEEKLY_OFF'
+                              ? 'WO'
+                              : 'A'}
                       </div>
                     </div>
                   ))}
@@ -1141,6 +1331,70 @@ export function AttendancePage() {
           </div>
         </aside>
       </div>
+
+      <Modal
+        isOpen={isHolidayModalOpen}
+        onClose={() => setIsHolidayModalOpen(false)}
+        title="Manage Holidays"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="holiday-name">Holiday Name</Label>
+            <input
+              id="holiday-name"
+              type="text"
+              value={holidayForm.name}
+              onChange={(event) =>
+                setHolidayForm((current) => ({
+                  ...current,
+                  name: event.target.value,
+                }))
+              }
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="holiday-date">Holiday Date</Label>
+              <input
+                id="holiday-date"
+                type="date"
+                value={holidayForm.holidayDate}
+                onChange={(event) =>
+                  setHolidayForm((current) => ({
+                    ...current,
+                    holidayDate: event.target.value,
+                  }))
+                }
+                className={nativeDateTimeInputClassName}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="holiday-description">Description</Label>
+              <input
+                id="holiday-description"
+                type="text"
+                value={holidayForm.description}
+                onChange={(event) =>
+                  setHolidayForm((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsHolidayModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateHoliday} disabled={createHolidayMutation.isPending || !holidayForm.name.trim()}>
+              {createHolidayMutation.isPending ? 'Saving...' : 'Save Holiday'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={isManualCorrectionModalOpen}
@@ -1491,3 +1745,4 @@ export function AttendancePage() {
     </div>
   );
 }
+

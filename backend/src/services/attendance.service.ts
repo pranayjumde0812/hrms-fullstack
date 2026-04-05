@@ -6,7 +6,7 @@ import {
   Role,
   WorkMode,
 } from '@prisma/client';
-import { attendanceRegularizationRepository, attendanceRepository, usersRepository } from '../repositories';
+import { attendanceRegularizationRepository, attendanceRepository, holidaysRepository, usersRepository } from '../repositories';
 import { AppError } from '../utils/http';
 
 const getStartOfToday = () => {
@@ -21,6 +21,7 @@ const HALF_DAY_AFTER_HOUR = 13;
 const HALF_DAY_AFTER_MINUTE = 0;
 const HALF_DAY_MIN_WORKING_HOURS = 4.5;
 const STANDARD_WORKING_HOURS = 8;
+const DEFAULT_WEEKLY_OFF_DAYS = [0, 6];
 
 const ensureAttendanceRequired = (role: Role) => {
   if (role === 'SUPER_ADMIN') {
@@ -98,15 +99,24 @@ const resolveMonthlyRange = (month?: number, year?: number) => {
 
 export const getMyAttendance = async (user: { id: number; role: Role }) => {
   const attendanceDate = getStartOfToday();
-  const [today, history] = await Promise.all([
+  const [today, history, todayHoliday] = await Promise.all([
     attendanceRepository.findAttendanceForDate(user.id, attendanceDate),
     attendanceRepository.listAttendanceForUser(user.id),
+    holidaysRepository.findHolidayByDate(attendanceDate),
   ]);
 
   return {
     today,
     history,
     isAttendanceRequired: user.role !== 'SUPER_ADMIN',
+    todayClassification: today
+      ? 'PRESENT'
+      : todayHoliday
+        ? 'HOLIDAY'
+        : isWeeklyOffDate(attendanceDate)
+          ? 'WEEKLY_OFF'
+          : 'WORKING_DAY',
+    todayHoliday,
     rules: {
       lateAfter: `${String(LATE_AFTER_HOUR).padStart(2, '0')}:${String(LATE_AFTER_MINUTE).padStart(2, '0')}`,
       halfDayAfter: `${String(HALF_DAY_AFTER_HOUR).padStart(2, '0')}:${String(HALF_DAY_AFTER_MINUTE).padStart(2, '0')}`,
@@ -211,22 +221,32 @@ export const getMonthlyAttendance = async (input: {
       : input.requester.id;
 
   const { from, to, month, year } = resolveMonthlyRange(input.month, input.year);
-  const records = await attendanceRepository.listAttendanceForUserInRange(targetUserId, from, to);
+  const [records, holidays] = await Promise.all([
+    attendanceRepository.listAttendanceForUserInRange(targetUserId, from, to),
+    holidaysRepository.listHolidays(from, to),
+  ]);
   const daysInMonth = to.getDate();
 
   const recordsByDay = new Map<number, (typeof records)[number]>();
   records.forEach((record) => {
     recordsByDay.set(new Date(record.attendanceDate).getDate(), record);
   });
+  const holidaysByDay = new Map<number, (typeof holidays)[number]>();
+  holidays.forEach((holiday) => {
+    holidaysByDay.set(new Date(holiday.holidayDate).getDate(), holiday);
+  });
 
   const days = Array.from({ length: daysInMonth }, (_, index) => {
     const day = index + 1;
     const record = recordsByDay.get(day);
+    const holiday = holidaysByDay.get(day);
+    const currentDate = new Date(year, month - 1, day);
+    const status = record ? 'PRESENT' : holiday ? 'HOLIDAY' : isWeeklyOffDate(currentDate) ? 'WEEKLY_OFF' : 'ABSENT';
 
     return {
       day,
-      date: new Date(year, month - 1, day).toISOString(),
-      status: record ? 'PRESENT' : 'ABSENT',
+      date: currentDate.toISOString(),
+      status,
       dayStatus: record?.dayStatus ?? null,
       lateMark: record?.lateMark ?? false,
       workingHours: record?.workingHours ?? null,
@@ -238,6 +258,7 @@ export const getMonthlyAttendance = async (input: {
       remarks: record?.remarks ?? null,
       manualCorrectionReason: record?.manualCorrectionReason ?? null,
       manualCorrectedAt: record?.manualCorrectedAt ?? null,
+      holidayName: holiday?.name ?? null,
     };
   });
 
@@ -262,12 +283,16 @@ export const getMonthlyAttendance = async (input: {
       lateDays: records.filter((record) => record.dayStatus === 'LATE').length,
       halfDays: records.filter((record) => record.dayStatus === 'HALF_DAY').length,
       absentDays: days.filter((day) => day.status === 'ABSENT').length,
+      holidayDays: days.filter((day) => day.status === 'HOLIDAY').length,
+      weeklyOffDays: days.filter((day) => day.status === 'WEEKLY_OFF').length,
       overtimeDays: records.filter((record) => record.overtimeMinutes > 0).length,
       pendingOvertimeDays: records.filter((record) => record.overtimeStatus === 'PENDING').length,
     },
     days,
   };
 };
+
+const isWeeklyOffDate = (date: Date) => DEFAULT_WEEKLY_OFF_DAYS.includes(date.getDay());
 
 export const listAttendanceViewableUsers = async (requester: { id: number; role: Role }) => {
   if (!canReviewOtherUsersAttendance(requester.role)) {

@@ -18,7 +18,7 @@ Status guide:
 - `[x]` Late mark and half-day calculation
 - `[x]` Overtime tracking and approval
 - `[x]` Attendance remarks and manual HR correction
-- `[ ]` Holiday and weekly-off attendance handling
+- `[x]` Holiday and weekly-off attendance handling
 
 ### 2. Manager attendance workflow
 - `[x]` Reporting manager mapping
@@ -176,4 +176,5 @@ If we want to continue development in the best sequence, start here:
 - `PROJECT_MANAGER` is currently the closest available role to act like a manager.
 - If we want real reporting structures, we should add `managerId` or a reporting hierarchy to the user model.
 - Overtime tracking and approval is now implemented on attendance records with manager / HR review.
+- Holiday master is now available, and weekly offs are currently handled with a default Saturday / Sunday rule.
 - Most industry-ready HRMS workflows depend on approval chains, holiday logic, and payroll rules.

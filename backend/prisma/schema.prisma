@@ -98,6 +98,16 @@ model Department {
   updatedAt   DateTime @updatedAt
 }
 
+model Holiday {
+  id          Int      @id @default(autoincrement())
+  name        String
+  holidayDate DateTime @unique
+  description String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model Project {
   id          Int         @id @default(autoincrement())
   name        String
