@@ -64,6 +64,7 @@ These should be treated as shared foundations, not isolated features:
 - Employment type
 - Work location / branch / legal entity
 - Reporting manager structure
+- Employee deployment history: project, bench, internal assignment, and manager timeline
 
 ### Must be ready before payroll
 - Attendance policy settings
@@ -141,6 +142,11 @@ These should be treated as shared foundations, not isolated features:
 - `[ ]` Employee transfer between departments
 - `[x]` Employee lifecycle status: active, probation, notice, exited
 - `[ ]` Employee skill tags and designations
+- `[ ]` Employee deployment history timeline: which project the employee worked on, from when to when
+- `[ ]` Bench history tracking with start date, end date, reason, and owning manager
+- `[ ]` Manager history tracking so HR can see previous manager and current manager
+- `[ ]` Current allocation snapshot: current project, bench status, allocation percent, reporting manager
+- `[ ]` Internal / non-billable assignment tracking for training, shadow, support, and admin work
 - `[x]` Employment type: full-time, intern, contractor, consultant
 - `[x]` Work location / branch / legal entity tagging
 
@@ -213,6 +219,9 @@ These should be treated as shared foundations, not isolated features:
 - `[ ]` Payroll export
 - `[ ]` Department-wise analytics
 - `[ ]` Custom filters by date, employee, department
+- `[ ]` Employee deployment history report by employee, project, manager, and date range
+- `[ ]` Bench utilization report: total bench days, current bench count, bench trend by month
+- `[ ]` Manager movement report: who reported to whom during a selected period
 
 ### 15. Notifications
 - `[ ]` Email notifications
@@ -272,6 +281,7 @@ This sequence takes the current product state into account and should be followe
 - `[x]` Work location / branch / legal entity tagging
 - `[ ]` Reporting hierarchy cleanup
 - `[ ]` Department heads and team ownership
+- `[ ]` Define employee deployment master rules: assignment types, bench reasons, allocation statuses
 
 ### Phase 1C: Complete leave foundation
 - `[ ]` Leave types and leave policy master
@@ -302,6 +312,8 @@ This sequence takes the current product state into account and should be followe
 - `[ ]` Pending approvals summary
 - `[ ]` Employee self-service profile and documents
 - `[ ]` Personal attendance and leave dashboard
+- `[ ]` Employee deployment timeline view in profile
+- `[ ]` HR resource dashboard with current project allocation and bench population
 
 ## What To Develop First Right Now
 
@@ -367,5 +379,7 @@ Example for leave:
 - Overtime tracking and approval is now implemented on attendance records with manager / HR review.
 - Holiday master is now available, and weekly offs are currently handled with a default Saturday / Sunday rule.
 - Weekly off should become configurable by company, location, shift, or employee before payroll rollout.
+- Employee project history, bench history, and manager history should be modeled as time-bound records, not overwritten on the `User` row, otherwise the organization loses past reporting and allocation context.
+- For real-world HR reporting, assignment records should support project, bench, and internal work so utilization reports are accurate even when an employee is not billable.
 - Industry-ready Phase 1 usually also requires auditability, policy configurability, and a clean approval fallback path, not just CRUD flows.
 - Most industry-ready HRMS workflows depend on approval chains, holiday logic, and payroll rules.

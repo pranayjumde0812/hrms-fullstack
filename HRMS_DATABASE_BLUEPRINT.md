@@ -212,7 +212,20 @@ For project membership, prefer an explicit join table over Prisma's implicit `_U
 Recommended approach:
 - use `UserProjectAssignment`
 - keep readable keys like `userId` and `projectId`
-- allow future metadata like `assignedAt`, `assignedById`, `roleInProject`, `isActive`
+- allow future metadata like `assignedAt`, `assignedById`, `roleInProject`, `allocationPercent`, `billingStatus`, `endedAt`, `endReason`, `isActive`
+
+To support HR history properly, do not rely only on the current active assignment row.
+
+We should also preserve time-bound history for:
+- which project an employee worked on and for how long
+- when the employee was on bench
+- who the reporting manager was during that period
+- whether the assignment was billable, shadow, training, support, or internal
+
+Recommended extension:
+- keep `UserProjectAssignment` for current operational assignment workflows
+- add separate history-safe tables for employee allocation and manager changes
+- make all history rows date-bounded with `effectiveFrom` and `effectiveTo`
 
 They are not blockers for the Phase 1 HR foundation work.
 
@@ -269,11 +282,55 @@ This is the recommended target structure to build toward.
 - `userId`
 - `projectId`
 - `assignedAt`
+- `effectiveFrom`
+- `effectiveTo` nullable
 - `assignedById` nullable
 - `roleInProject` nullable
+- `allocationPercent` nullable
+- `billingStatus` nullable
+- `assignmentStatus`
+- `endReason` nullable
 - `isActive`
 - `createdAt`
 - `updatedAt`
+
+### `EmployeeAllocationHistory`
+- `id`
+- `userId`
+- `projectId` nullable
+- `managerId` nullable
+- `allocationType`
+- `allocationPercent`
+- `billingStatus` nullable
+- `benchReason` nullable
+- `notes` nullable
+- `effectiveFrom`
+- `effectiveTo` nullable
+- `createdByUserId` nullable
+- `createdAt`
+- `updatedAt`
+
+Use this table as the long-term source of truth for employee deployment history.
+
+Notes:
+- `allocationType` should cover at least `PROJECT`, `BENCH`, `INTERNAL`, `TRAINING`, `SHADOW`
+- keep `projectId` nullable so bench or internal assignments do not require a project row
+- only one current active allocation row should exist per employee unless multi-project allocation is intentionally supported
+
+### `EmployeeManagerHistory`
+- `id`
+- `userId`
+- `managerId`
+- `changeReason` nullable
+- `effectiveFrom`
+- `effectiveTo` nullable
+- `createdByUserId` nullable
+- `createdAt`
+- `updatedAt`
+
+Use this table to answer both:
+- who is the current manager
+- who was the manager during any past project or bench period
 
 ### `Holiday`
 - `id`
@@ -503,6 +560,9 @@ This is the safest path to update the real schema.
 - `[x]` extend `Holiday` with optional location applicability
 - `[x]` add attendance source enum and audit log table
 - `[~]` wire attendance audit log writes into all change flows
+- `[ ]` extend project assignment to support start/end dates, allocation percent, and end reason
+- `[ ]` add `EmployeeAllocationHistory`
+- `[ ]` add `EmployeeManagerHistory`
 
 ### Stage 2: Refactor leave properly
 - replace plain leave strings with enums or master references
@@ -529,8 +589,9 @@ If we start schema work now, do it in this order:
 5. Extend `Holiday`
 6. Extend `Attendance` with source and policy relation
 7. Add `AttendanceAuditLog`
-8. Refactor leave models
-9. Refactor payroll models
+8. Extend project assignment and employee history models
+9. Refactor leave models
+10. Refactor payroll models
 
 ## Important Migration Rule
 
@@ -562,6 +623,9 @@ Current phase status:
 - One runtime mismatch in weekly-off rule creation was fixed during smoke testing
 
 This means the attendance-master phase is stable enough to treat as the baseline before starting the leave foundation.
+
+Additional design note:
+- employee deployment history should be stored in append-only or date-bounded history tables instead of overwriting current project and manager fields, because HR reports need historical truth by period
 
 ## Next Starting Point
 
