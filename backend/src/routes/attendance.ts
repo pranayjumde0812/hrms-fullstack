@@ -6,6 +6,7 @@ import { userIdParamSchema } from '../validators/users.validation';
 import {
   attendanceCheckInSchema,
   attendanceCheckOutSchema,
+  attendanceManualCorrectionSchema,
   attendanceMonthlyQuerySchema,
   attendanceOvertimeReviewSchema,
 } from '../validators/attendance.validation';
@@ -20,6 +21,7 @@ router.get('/monthly', validateQuery(attendanceMonthlyQuerySchema), attendanceCo
 router.get('/viewable-users', attendanceController.getViewableAttendanceUsersHandler);
 router.get('/regularizations', attendanceController.getRegularizationsHandler);
 router.post('/regularizations', validateBody(attendanceRegularizationCreateSchema), attendanceController.createRegularizationHandler);
+router.post('/manual-corrections', validateBody(attendanceManualCorrectionSchema), attendanceController.manualCorrectionHandler);
 router.patch('/regularizations/:id', validateParams(userIdParamSchema), validateBody(attendanceRegularizationReviewSchema), attendanceController.reviewRegularizationHandler);
 router.patch('/overtime/:id', validateParams(userIdParamSchema), validateBody(attendanceOvertimeReviewSchema), attendanceController.reviewOvertimeHandler);
 router.post('/check-in', validateBody(attendanceCheckInSchema), attendanceController.checkInHandler);

@@ -17,7 +17,7 @@ Status guide:
 - `[x]` Attendance regularization request
 - `[x]` Late mark and half-day calculation
 - `[x]` Overtime tracking and approval
-- `[ ]` Attendance remarks and manual HR correction
+- `[x]` Attendance remarks and manual HR correction
 - `[ ]` Holiday and weekly-off attendance handling
 
 ### 2. Manager attendance workflow

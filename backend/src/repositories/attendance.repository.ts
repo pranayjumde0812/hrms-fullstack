@@ -84,6 +84,53 @@ export const findAttendanceById = (id: AttendanceId) => {
           role: true,
         },
       },
+      manualCorrector: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+        },
+      },
+    },
+  });
+};
+
+export const findAttendanceForDateWithRelations = (userId: UserId, attendanceDate: Date) => {
+  return prisma.attendance.findUnique({
+    where: {
+      userId_attendanceDate: {
+        userId,
+        attendanceDate,
+      },
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          managerId: true,
+          department: { select: { name: true } },
+        },
+      },
+      overtimeReviewer: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+        },
+      },
+      manualCorrector: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+        },
+      },
     },
   });
 };

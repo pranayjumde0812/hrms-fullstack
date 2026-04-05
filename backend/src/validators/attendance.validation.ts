@@ -21,3 +21,29 @@ export const attendanceOvertimeReviewSchema = z.object({
   status: z.enum(['APPROVED', 'REJECTED']),
   reviewNotes: z.string().max(500).optional(),
 });
+
+const optionalTimeString = z.string().regex(/^\d{2}:\d{2}$/).optional();
+
+export const attendanceManualCorrectionSchema = z
+  .object({
+    userId: z.coerce.number(),
+    attendanceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    workMode: z.enum(['WFH', 'OFFICE', 'OTHER']).optional(),
+    checkInTime: optionalTimeString,
+    checkOutTime: optionalTimeString,
+    remarks: z.string().max(500).optional(),
+    correctionReason: z.string().min(5).max(500),
+  })
+  .refine(
+    (value) => {
+      if (value.checkOutTime && !value.checkInTime) {
+        return false;
+      }
+
+      return true;
+    },
+    {
+      message: 'Check-out time requires check-in time',
+      path: ['checkOutTime'],
+    },
+  );

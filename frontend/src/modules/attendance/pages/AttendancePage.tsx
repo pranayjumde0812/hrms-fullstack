@@ -15,6 +15,9 @@ type AttendanceRecord = {
   dayStatus?: 'PRESENT' | 'LATE' | 'HALF_DAY';
   lateMark?: boolean;
   workingHours?: number | null;
+  remarks?: string | null;
+  manualCorrectionReason?: string | null;
+  manualCorrectedAt?: string | null;
   overtimeMinutes?: number;
   overtimeStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
   overtimeReviewedAt?: string | null;
@@ -131,6 +134,9 @@ type MonthlyAttendance = {
     workMode: WorkMode | null;
     checkInAt: string | null;
     checkOutAt: string | null;
+    remarks: string | null;
+    manualCorrectionReason: string | null;
+    manualCorrectedAt: string | null;
   }>;
 };
 
@@ -194,6 +200,21 @@ const formatDuration = (start: string, end?: string | null) => {
   return `${hours}h ${minutes}m`;
 };
 
+const formatWorkedHours = (hours?: number | null) => {
+  if (hours == null) {
+    return '--';
+  }
+
+  const totalMinutes = Math.max(0, Math.round(hours * 60));
+  const wholeHours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
+
+  return `${wholeHours}h ${remainingMinutes}m`;
+};
+
+const nativeDateTimeInputClassName =
+  'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm [color-scheme:light] dark:[color-scheme:dark]';
+
 const formatOvertime = (minutes?: number | null) => {
   if (!minutes || minutes <= 0) {
     return '--';
@@ -212,6 +233,7 @@ export function AttendancePage() {
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isRegularizationModalOpen, setIsRegularizationModalOpen] = useState(false);
+  const [isManualCorrectionModalOpen, setIsManualCorrectionModalOpen] = useState(false);
   const [reviewingRequest, setReviewingRequest] = useState<AttendanceRegularization | null>(null);
   const [reviewingOvertime, setReviewingOvertime] = useState<AttendanceOvertimeRequest | null>(null);
   const [selectedMonthNumber, setSelectedMonthNumber] = useState(() => new Date().getMonth() + 1);
@@ -226,8 +248,18 @@ export function AttendancePage() {
     requestedWorkMode: 'OFFICE' as WorkMode,
     reason: '',
   });
+  const [manualCorrectionForm, setManualCorrectionForm] = useState({
+    userId: 0,
+    attendanceDate: new Date().toISOString().split('T')[0],
+    workMode: 'OFFICE' as WorkMode,
+    checkInTime: '',
+    checkOutTime: '',
+    remarks: '',
+    correctionReason: '',
+  });
 
   const canReviewOtherAttendance = user ? ['SUPER_ADMIN', 'HR_MANAGER', 'PROJECT_MANAGER'].includes(user.role) : false;
+  const canManageManualCorrections = user ? ['SUPER_ADMIN', 'HR_MANAGER'].includes(user.role) : false;
 
   const { data, isLoading } = useQuery({
     queryKey: ['attendance'],
@@ -380,11 +412,44 @@ export function AttendancePage() {
     },
   });
 
+  const manualCorrectionMutation = useMutation({
+    mutationFn: async () =>
+      api.post('/attendance/manual-corrections', {
+        ...manualCorrectionForm,
+        checkInTime: manualCorrectionForm.checkInTime || undefined,
+        checkOutTime: manualCorrectionForm.checkOutTime || undefined,
+        remarks: manualCorrectionForm.remarks || undefined,
+      }),
+    onSuccess: async () => {
+      await refreshAttendance();
+      setIsManualCorrectionModalOpen(false);
+      setManualCorrectionForm((current) => ({
+        ...current,
+        attendanceDate: new Date().toISOString().split('T')[0],
+        checkInTime: '',
+        checkOutTime: '',
+        remarks: '',
+        correctionReason: '',
+      }));
+    },
+  });
+
   useEffect(() => {
     if (user && selectedUserId == null && attendanceUsers.length > 0) {
       setSelectedUserId(canReviewOtherAttendance ? user.id : attendanceUsers[0].id);
     }
   }, [attendanceUsers, canReviewOtherAttendance, selectedUserId, user]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    setManualCorrectionForm((current) => ({
+      ...current,
+      userId: targetUserId || user.id,
+    }));
+  }, [targetUserId, user]);
 
   if (!user) {
     return null;
@@ -451,6 +516,16 @@ export function AttendancePage() {
     }
   };
 
+  const handleSubmitManualCorrection = async () => {
+    try {
+      await manualCorrectionMutation.mutateAsync();
+      setFeedback({ type: 'success', message: 'Attendance manually corrected successfully.' });
+    } catch (error) {
+      const message = (error as any)?.response?.data?.message || 'Unable to save manual attendance correction.';
+      setFeedback({ type: 'error', message });
+    }
+  };
+
   if (isLoading) {
     return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading attendance...</div>;
   }
@@ -472,6 +547,12 @@ export function AttendancePage() {
           <Button variant="outline" onClick={() => setIsRegularizationModalOpen(true)} className="gap-2">
             <FileEdit className="h-4 w-4" />
             Request Regularization
+          </Button>
+        )}
+        {canManageManualCorrections && (
+          <Button variant="outline" onClick={() => setIsManualCorrectionModalOpen(true)} className="gap-2">
+            <FileEdit className="h-4 w-4" />
+            Manual Correction
           </Button>
         )}
         {canReviewOtherAttendance && pendingReviewCount > 0 && (
@@ -600,7 +681,7 @@ export function AttendancePage() {
               </div>
               <p className="text-lg font-semibold">
                 {todayAttendance?.workingHours != null
-                  ? `${todayAttendance.workingHours.toFixed(2)} hrs`
+                  ? formatWorkedHours(todayAttendance.workingHours)
                 : todayAttendance
                   ? formatDuration(todayAttendance.checkInAt, todayAttendance.checkOutAt)
                   : '--'}
@@ -608,6 +689,14 @@ export function AttendancePage() {
               {todayAttendance?.overtimeMinutes && todayAttendance.overtimeMinutes > 0 ? (
                 <p className="mt-2 text-xs text-muted-foreground">
                   Overtime: {formatOvertime(todayAttendance.overtimeMinutes)} {todayAttendance.overtimeStatus ? `(${overtimeStatusLabels[todayAttendance.overtimeStatus]})` : ''}
+                </p>
+              ) : null}
+              {todayAttendance?.remarks ? (
+                <p className="mt-2 text-xs text-muted-foreground">Remarks: {todayAttendance.remarks}</p>
+              ) : null}
+              {todayAttendance?.manualCorrectedAt ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Manually corrected on {formatDateTime(todayAttendance.manualCorrectedAt)}
                 </p>
               ) : null}
             </div>
@@ -642,13 +731,14 @@ export function AttendancePage() {
                   <th className="px-4 py-3 font-medium">Check Out</th>
                   <th className="px-4 py-3 font-medium">Duration</th>
                   <th className="px-4 py-3 font-medium">Overtime</th>
+                  <th className="px-4 py-3 font-medium">Remarks</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {attendanceHistory.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                       No attendance has been recorded yet.
                     </td>
                   </tr>
@@ -661,13 +751,23 @@ export function AttendancePage() {
                       <td className="px-4 py-4">{formatDateTime(record.checkOutAt)}</td>
                       <td className="px-4 py-4">
                         {record.workingHours != null
-                          ? `${record.workingHours.toFixed(2)} hrs`
+                          ? formatWorkedHours(record.workingHours)
                           : formatDuration(record.checkInAt, record.checkOutAt)}
                       </td>
                       <td className="px-4 py-4">
                         {record.overtimeMinutes && record.overtimeMinutes > 0
                           ? `${formatOvertime(record.overtimeMinutes)}${record.overtimeStatus ? ` (${overtimeStatusLabels[record.overtimeStatus]})` : ''}`
                           : '--'}
+                      </td>
+                      <td className="px-4 py-4 text-xs text-muted-foreground">
+                        {record.remarks || record.manualCorrectionReason ? (
+                          <div className="space-y-1">
+                            {record.remarks ? <p>{record.remarks}</p> : null}
+                            {record.manualCorrectionReason ? <p>Correction: {record.manualCorrectionReason}</p> : null}
+                          </div>
+                        ) : (
+                          '--'
+                        )}
                       </td>
                       <td className="px-4 py-4">
                         <Badge
@@ -844,7 +944,7 @@ export function AttendancePage() {
                         </Badge>
                       </div>
                       <div className="mt-3 text-sm text-muted-foreground">
-                        Overtime: {formatOvertime(request.overtimeMinutes)} {request.workingHours != null ? `(${request.workingHours.toFixed(2)} hrs worked)` : ''}
+                        Overtime: {formatOvertime(request.overtimeMinutes)} {request.workingHours != null ? `(${formatWorkedHours(request.workingHours)} worked)` : ''}
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         {request.workMode} · {request.dayStatus}
@@ -994,6 +1094,10 @@ export function AttendancePage() {
                     <span className="h-3 w-3 rounded-sm bg-zinc-200 dark:bg-zinc-800" />
                     Absent
                   </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider">C</span>
+                    Manually corrected
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-7 gap-3">
@@ -1022,7 +1126,9 @@ export function AttendancePage() {
                             ? 'HD'
                             : day.dayStatus === 'LATE'
                               ? 'L'
-                              : 'P'
+                              : day.manualCorrectedAt
+                                ? 'C'
+                                : 'P'
                           : 'A'}
                       </div>
                     </div>
@@ -1036,6 +1142,144 @@ export function AttendancePage() {
         </aside>
       </div>
 
+      <Modal
+        isOpen={isManualCorrectionModalOpen}
+        onClose={() => setIsManualCorrectionModalOpen(false)}
+        title="Manual Attendance Correction"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="manual-user">Employee</Label>
+              <Select
+                id="manual-user"
+                value={String(manualCorrectionForm.userId)}
+                onChange={(event) =>
+                  setManualCorrectionForm((current) => ({
+                    ...current,
+                    userId: Number(event.target.value),
+                  }))
+                }
+              >
+                {attendanceUsers.map((attendanceUser) => (
+                  <option key={attendanceUser.id} value={attendanceUser.id}>
+                    {attendanceUser.firstName} {attendanceUser.lastName} ({attendanceUser.role.replace('_', ' ')})
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="manual-date">Attendance Date</Label>
+              <input
+                id="manual-date"
+                type="date"
+                value={manualCorrectionForm.attendanceDate}
+                onChange={(event) =>
+                  setManualCorrectionForm((current) => ({
+                    ...current,
+                    attendanceDate: event.target.value,
+                  }))
+                }
+                className={nativeDateTimeInputClassName}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="manual-work-mode">Work Mode</Label>
+              <Select
+                id="manual-work-mode"
+                value={manualCorrectionForm.workMode}
+                onChange={(event) =>
+                  setManualCorrectionForm((current) => ({
+                    ...current,
+                    workMode: event.target.value as WorkMode,
+                  }))
+                }
+              >
+                <option value="WFH">WFH</option>
+                <option value="OFFICE">Office</option>
+                <option value="OTHER">Other</option>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="manual-check-in">Check-In Time</Label>
+              <input
+                id="manual-check-in"
+                type="time"
+                value={manualCorrectionForm.checkInTime}
+                onChange={(event) =>
+                  setManualCorrectionForm((current) => ({
+                    ...current,
+                    checkInTime: event.target.value,
+                  }))
+                }
+                className={nativeDateTimeInputClassName}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="manual-check-out">Check-Out Time</Label>
+              <input
+                id="manual-check-out"
+                type="time"
+                value={manualCorrectionForm.checkOutTime}
+                onChange={(event) =>
+                  setManualCorrectionForm((current) => ({
+                    ...current,
+                    checkOutTime: event.target.value,
+                  }))
+                }
+                className={nativeDateTimeInputClassName}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="manual-remarks">Attendance Remarks</Label>
+            <Textarea
+              id="manual-remarks"
+              value={manualCorrectionForm.remarks}
+              onChange={(event) =>
+                setManualCorrectionForm((current) => ({
+                  ...current,
+                  remarks: event.target.value,
+                }))
+              }
+              placeholder="Example: Client visit, biometric missed, approved field work."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="manual-reason">Correction Reason</Label>
+            <Textarea
+              id="manual-reason"
+              value={manualCorrectionForm.correctionReason}
+              onChange={(event) =>
+                setManualCorrectionForm((current) => ({
+                  ...current,
+                  correctionReason: event.target.value,
+                }))
+              }
+              placeholder="Explain why HR is making this correction."
+            />
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            For new records, check-in time and work mode are required. For existing records, empty time fields keep the current values.
+          </p>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsManualCorrectionModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitManualCorrection} disabled={manualCorrectionMutation.isPending || !manualCorrectionForm.userId}>
+              {manualCorrectionMutation.isPending ? 'Saving...' : 'Save Correction'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal isOpen={isRegularizationModalOpen} onClose={() => setIsRegularizationModalOpen(false)} title="Request Attendance Regularization">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -1046,7 +1290,7 @@ export function AttendancePage() {
                 type="date"
                 value={regularizationForm.attendanceDate}
                 onChange={(event) => setRegularizationForm((current) => ({ ...current, attendanceDate: event.target.value }))}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className={nativeDateTimeInputClassName}
               />
             </div>
             <div className="space-y-2">
@@ -1080,7 +1324,7 @@ export function AttendancePage() {
                 onChange={(event) =>
                   setRegularizationForm((current) => ({ ...current, requestedCheckInTime: event.target.value }))
                 }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className={nativeDateTimeInputClassName}
               />
             </div>
           )}
@@ -1095,7 +1339,7 @@ export function AttendancePage() {
                 onChange={(event) =>
                   setRegularizationForm((current) => ({ ...current, requestedCheckOutTime: event.target.value }))
                 }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className={nativeDateTimeInputClassName}
               />
             </div>
           )}
@@ -1216,7 +1460,7 @@ export function AttendancePage() {
               </p>
               <p className="mt-2">
                 {reviewingOvertime.workingHours != null
-                  ? `Worked ${reviewingOvertime.workingHours.toFixed(2)} hrs from ${formatTime(reviewingOvertime.checkInAt)} to ${formatTime(reviewingOvertime.checkOutAt)}`
+                  ? `Worked ${formatWorkedHours(reviewingOvertime.workingHours)} from ${formatTime(reviewingOvertime.checkInAt)} to ${formatTime(reviewingOvertime.checkOutAt)}`
                   : `Check-in at ${formatTime(reviewingOvertime.checkInAt)} and check-out at ${formatTime(reviewingOvertime.checkOutAt)}`}
               </p>
             </div>

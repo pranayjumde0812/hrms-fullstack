@@ -30,6 +30,7 @@ const ensureAttendanceRequired = (role: Role) => {
 
 const canReviewOtherUsersAttendance = (role: Role) => ATTENDANCE_REVIEW_ROLES.includes(role);
 const canElevatedReviewRegularization = (role: Role) => ['SUPER_ADMIN', 'HR_MANAGER'].includes(role);
+const canManageManualAttendanceCorrection = (role: Role) => ['SUPER_ADMIN', 'HR_MANAGER'].includes(role);
 
 const getAttendanceDateFromString = (value: string) => {
   const [year, month, day] = value.split('-').map(Number);
@@ -234,6 +235,9 @@ export const getMonthlyAttendance = async (input: {
       checkOutAt: record?.checkOutAt ?? null,
       overtimeMinutes: record?.overtimeMinutes ?? 0,
       overtimeStatus: record?.overtimeStatus ?? null,
+      remarks: record?.remarks ?? null,
+      manualCorrectionReason: record?.manualCorrectionReason ?? null,
+      manualCorrectedAt: record?.manualCorrectedAt ?? null,
     };
   });
 
@@ -561,5 +565,89 @@ export const reviewOvertime = async (input: {
     overtimeReviewerId: input.reviewer.id,
     overtimeReviewNotes: input.reviewNotes,
     overtimeReviewedAt: new Date(),
+  });
+};
+
+export const applyManualAttendanceCorrection = async (input: {
+  requester: { id: number; role: Role };
+  userId: number;
+  attendanceDate: string;
+  workMode?: WorkMode;
+  checkInTime?: string;
+  checkOutTime?: string;
+  remarks?: string;
+  correctionReason: string;
+}) => {
+  if (!canManageManualAttendanceCorrection(input.requester.role)) {
+    throw new AppError(403, 'You are not allowed to make manual attendance corrections');
+  }
+
+  const user = await usersRepository.findUserById(input.userId);
+
+  if (!user) {
+    throw new AppError(404, 'User not found');
+  }
+
+  ensureAttendanceRequired(user.role);
+
+  const attendanceDate = getAttendanceDateFromString(input.attendanceDate);
+  const existingAttendance = await attendanceRepository.findAttendanceForDateWithRelations(input.userId, attendanceDate);
+
+  if (!existingAttendance && (!input.checkInTime || !input.workMode)) {
+    throw new AppError(400, 'New manual attendance entries require check-in time and work mode');
+  }
+
+  const resolvedCheckInAt = input.checkInTime
+    ? combineDateAndTime(input.attendanceDate, input.checkInTime)
+    : existingAttendance?.checkInAt;
+
+  const resolvedCheckOutAt = input.checkOutTime
+    ? combineDateAndTime(input.attendanceDate, input.checkOutTime)
+    : existingAttendance?.checkOutAt ?? undefined;
+
+  const resolvedWorkMode = input.workMode ?? existingAttendance?.workMode;
+
+  if (!resolvedCheckInAt || !resolvedWorkMode) {
+    throw new AppError(400, 'Manual correction requires a check-in time and work mode');
+  }
+
+  if (resolvedCheckOutAt && resolvedCheckOutAt <= resolvedCheckInAt) {
+    throw new AppError(400, 'Check-out time must be later than check-in time');
+  }
+
+  const metrics = computeAttendanceMetrics(resolvedCheckInAt, resolvedCheckOutAt);
+  const remarks = input.remarks?.trim() || null;
+
+  if (existingAttendance) {
+    return attendanceRepository.updateAttendance(existingAttendance.id, {
+      checkInAt: resolvedCheckInAt,
+      checkOutAt: resolvedCheckOutAt,
+      workMode: resolvedWorkMode,
+      remarks,
+      dayStatus: metrics.dayStatus,
+      lateMark: metrics.lateMark,
+      workingHours: metrics.workingHours,
+      manualCorrectionReason: input.correctionReason,
+      manualCorrectedById: input.requester.id,
+      manualCorrectedAt: new Date(),
+      ...getOvertimeUpdatePayload(metrics),
+    });
+  }
+
+  return attendanceRepository.createAttendance({
+    userId: input.userId,
+    attendanceDate,
+    workMode: resolvedWorkMode,
+    remarks,
+    dayStatus: metrics.dayStatus,
+    lateMark: metrics.lateMark,
+    workingHours: metrics.workingHours ?? undefined,
+    overtimeMinutes: metrics.overtimeMinutes,
+    overtimeStatus: metrics.overtimeStatus,
+    manualCorrectionReason: input.correctionReason,
+    manualCorrectedById: input.requester.id,
+    manualCorrectedAt: new Date(),
+    checkInAt: resolvedCheckInAt,
+    checkOutAt: resolvedCheckOutAt,
   });
 };

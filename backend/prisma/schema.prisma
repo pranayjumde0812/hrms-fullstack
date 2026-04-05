@@ -79,6 +79,7 @@ model User {
   attendanceRegularizations AttendanceRegularization[] @relation("AttendanceRegularizationRequester")
   reviewedAttendanceRegularizations AttendanceRegularization[] @relation("AttendanceRegularizationReviewer")
   reviewedOvertimeAttendances Attendance[] @relation("AttendanceOvertimeReviewer")
+  manualCorrectedAttendances Attendance[] @relation("AttendanceManualCorrector")
   loginActivities LoginActivity[]
   payrolls       Payroll[]
   leaves         Leave[]
@@ -164,6 +165,7 @@ model Attendance {
   attendanceDate    DateTime
   workMode          WorkMode
   dayStatus         AttendanceDayStatus @default(PRESENT)
+  remarks           String?
   lateMark          Boolean   @default(false)
   workingHours      Float?
   overtimeMinutes   Int       @default(0)
@@ -171,6 +173,9 @@ model Attendance {
   overtimeReviewerId Int?
   overtimeReviewNotes String?
   overtimeReviewedAt DateTime?
+  manualCorrectionReason String?
+  manualCorrectedById Int?
+  manualCorrectedAt  DateTime?
   checkInAt         DateTime
   checkOutAt        DateTime?
   checkInLatitude   Float?
@@ -184,6 +189,7 @@ model Attendance {
 
   user              User     @relation(fields: [userId], references: [id])
   overtimeReviewer  User?    @relation("AttendanceOvertimeReviewer", fields: [overtimeReviewerId], references: [id])
+  manualCorrector   User?    @relation("AttendanceManualCorrector", fields: [manualCorrectedById], references: [id])
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

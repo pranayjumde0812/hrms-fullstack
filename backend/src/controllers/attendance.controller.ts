@@ -139,3 +139,28 @@ export const reviewOvertimeHandler = asyncHandler(async (req: AuthRequest, res: 
 
   res.json({ success: true, message: 'Attendance overtime reviewed', data: attendance });
 });
+
+export const manualCorrectionHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { userId, attendanceDate, workMode, checkInTime, checkOutTime, remarks, correctionReason } = req.body as {
+    userId: number;
+    attendanceDate: string;
+    workMode?: WorkMode;
+    checkInTime?: string;
+    checkOutTime?: string;
+    remarks?: string;
+    correctionReason: string;
+  };
+
+  const attendance = await attendanceService.applyManualAttendanceCorrection({
+    requester: req.user!,
+    userId,
+    attendanceDate,
+    workMode,
+    checkInTime,
+    checkOutTime,
+    remarks,
+    correctionReason,
+  });
+
+  res.json({ success: true, message: 'Attendance manually corrected', data: attendance });
+});
