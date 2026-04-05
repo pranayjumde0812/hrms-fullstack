@@ -1,4 +1,4 @@
-import { holidaysRepository } from '../repositories';
+import { holidaysRepository, workLocationsRepository } from '../repositories';
 import { AppError } from '../utils/http';
 
 const getDateFromString = (value: string) => {
@@ -19,10 +19,19 @@ export const listHolidays = (input?: { month?: number; year?: number }) => {
 export const createHoliday = async (input: {
   name: string;
   holidayDate: string;
+  workLocationId?: number | null;
+  isOptional?: boolean;
   description?: string;
 }) => {
   const holidayDate = getDateFromString(input.holidayDate);
-  const existing = await holidaysRepository.findHolidayByDate(holidayDate);
+  if (input.workLocationId != null) {
+    const workLocation = await workLocationsRepository.findWorkLocationById(input.workLocationId);
+    if (!workLocation) {
+      throw new AppError(404, 'Work location not found');
+    }
+  }
+
+  const existing = await holidaysRepository.findHolidayByDate(holidayDate, input.workLocationId);
 
   if (existing) {
     throw new AppError(409, 'A holiday already exists for this date');
@@ -31,6 +40,8 @@ export const createHoliday = async (input: {
   return holidaysRepository.createHoliday({
     name: input.name,
     holidayDate,
+    workLocation: input.workLocationId != null ? { connect: { id: input.workLocationId } } : undefined,
+    isOptional: input.isOptional ?? false,
     description: input.description,
   });
 };

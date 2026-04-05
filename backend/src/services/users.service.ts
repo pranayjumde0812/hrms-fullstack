@@ -1,5 +1,5 @@
 import { Role } from '@prisma/client';
-import { usersRepository } from '../repositories';
+import { usersRepository, workLocationsRepository } from '../repositories';
 import { CreateUserData, UpdateUserData } from '../repositories/users.repository';
 import { AppError } from '../utils/http';
 
@@ -42,16 +42,30 @@ export const listUsers = () => {
 };
 
 export const createUser = async (data: CreateUserData) => {
-  const existing = await usersRepository.findUserByEmail(data.email);
+  const [existingEmail, existingEmployeeCode] = await Promise.all([
+    usersRepository.findUserByEmail(data.email),
+    data.employeeCode ? usersRepository.findUserByEmployeeCode(data.employeeCode) : Promise.resolve(null),
+  ]);
 
-  if (existing) {
+  if (existingEmail) {
     throw new AppError(400, 'Email already exists');
+  }
+
+  if (existingEmployeeCode) {
+    throw new AppError(400, 'Employee code already exists');
   }
 
   await validateManagerAssignment({
     managerId: data.managerId,
     role: data.role,
   });
+
+  if (data.workLocationId != null) {
+    const workLocation = await workLocationsRepository.findWorkLocationById(data.workLocationId);
+    if (!workLocation) {
+      throw new AppError(404, 'Work location not found');
+    }
+  }
 
   const user = await usersRepository.createUser(data);
   const { password, ...safeUser } = user;
@@ -85,6 +99,20 @@ export const updateUser = async (userId: number, data: UpdateUserData) => {
     userId,
     role: data.role ?? existingUser.role,
   });
+
+  if (data.employeeCode && data.employeeCode !== existingUser.employeeCode) {
+    const conflict = await usersRepository.findUserByEmployeeCode(data.employeeCode);
+    if (conflict) {
+      throw new AppError(400, 'Employee code already exists');
+    }
+  }
+
+  if (data.workLocationId != null) {
+    const workLocation = await workLocationsRepository.findWorkLocationById(data.workLocationId);
+    if (!workLocation) {
+      throw new AppError(404, 'Work location not found');
+    }
+  }
 
   const user = await usersRepository.updateUser(userId, data);
   const { password, ...safeUser } = user;

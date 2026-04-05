@@ -17,6 +17,21 @@ enum Role {
   EMPLOYEE
 }
 
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  INTERN
+  CONTRACTOR
+  CONSULTANT
+}
+
+enum EmployeeLifecycleStatus {
+  ACTIVE
+  PROBATION
+  NOTICE
+  EXITED
+}
+
 enum TimesheetStatus {
   PENDING
   APPROVED
@@ -42,6 +57,13 @@ enum AttendanceRegularizationStatus {
   REJECTED
 }
 
+enum AttendanceSource {
+  WEB
+  MANUAL_CORRECTION
+  REGULARIZATION
+  IMPORT
+}
+
 enum AttendanceDayStatus {
   PRESENT
   LATE
@@ -59,20 +81,29 @@ enum AttendanceOvertimeStatus {
 // ----------------------------------------------------
 model User {
   id             Int         @id @default(autoincrement())
+  employeeCode   String?     @unique
   email          String      @unique
   password       String
   firstName      String
   lastName       String
   role           Role        @default(EMPLOYEE)
+  designation    String?
+  employmentType EmploymentType @default(FULL_TIME)
+  lifecycleStatus EmployeeLifecycleStatus @default(ACTIVE)
   baseSalary     Float       @default(0.0)
   hourlyRate     Float       @default(0.0)
   joiningDate    DateTime
+  confirmationDate DateTime?
+  exitDate       DateTime?
+  timeZone       String?
   departmentId   Int?
   managerId      Int?
+  workLocationId Int?
   
   department     Department? @relation(fields: [departmentId], references: [id])
   manager        User?       @relation("UserManager", fields: [managerId], references: [id])
   subordinates   User[]      @relation("UserManager")
+  workLocation   WorkLocation? @relation(fields: [workLocationId], references: [id])
   projectAssignments UserProjectAssignment[]
   timesheets     Timesheet[]
   attendances    Attendance[]
@@ -80,6 +111,7 @@ model User {
   reviewedAttendanceRegularizations AttendanceRegularization[] @relation("AttendanceRegularizationReviewer")
   reviewedOvertimeAttendances Attendance[] @relation("AttendanceOvertimeReviewer")
   manualCorrectedAttendances Attendance[] @relation("AttendanceManualCorrector")
+  attendanceAuditChanges AttendanceAuditLog[] @relation("AttendanceAuditChangedBy")
   loginActivities LoginActivity[]
   payrolls       Payroll[]
   leaves         Leave[]
@@ -98,14 +130,79 @@ model Department {
   updatedAt   DateTime @updatedAt
 }
 
-model Holiday {
+model WorkLocation {
   id          Int      @id @default(autoincrement())
-  name        String
-  holidayDate DateTime @unique
-  description String?
+  name        String   @unique
+  code        String   @unique
+  timeZone    String
+  address     String?
+  isActive    Boolean  @default(true)
+
+  users       User[]
+  attendancePolicies AttendancePolicy[]
+  holidays    Holiday[]
+  weeklyOffRules WeeklyOffRule[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model AttendancePolicy {
+  id                     Int      @id @default(autoincrement())
+  name                   String   @unique
+  workLocationId         Int?
+  standardWorkingHours   Float    @default(8)
+  lateAfterMinutes       Int
+  halfDayAfterMinutes    Int
+  halfDayMinWorkingHours Float
+  graceMinutes           Int      @default(0)
+  overtimeAllowed        Boolean  @default(true)
+  autoAbsentEnabled      Boolean  @default(false)
+  effectiveFrom          DateTime
+  effectiveTo            DateTime?
+  isActive               Boolean  @default(true)
+
+  workLocation           WorkLocation? @relation(fields: [workLocationId], references: [id])
+  attendances            Attendance[]
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([workLocationId, isActive])
+}
+
+model WeeklyOffRule {
+  id                Int      @id @default(autoincrement())
+  name              String
+  workLocationId    Int?
+  weekDay           Int
+  weekNumberInMonth Int?
+  isActive          Boolean  @default(true)
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+
+  workLocation      WorkLocation? @relation(fields: [workLocationId], references: [id])
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([workLocationId, isActive])
+}
+
+model Holiday {
+  id          Int      @id @default(autoincrement())
+  name        String
+  holidayDate DateTime
+  workLocationId Int?
+  isOptional  Boolean  @default(false)
+  description String?
+
+  workLocation WorkLocation? @relation(fields: [workLocationId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([holidayDate, workLocationId])
 }
 
 model Project {
@@ -192,6 +289,8 @@ model Attendance {
   userId            Int
   attendanceDate    DateTime
   workMode          WorkMode
+  source            AttendanceSource @default(WEB)
+  policyId          Int?
   dayStatus         AttendanceDayStatus @default(PRESENT)
   remarks           String?
   lateMark          Boolean   @default(false)
@@ -216,13 +315,16 @@ model Attendance {
   checkOutUserAgent String?
 
   user              User     @relation(fields: [userId], references: [id])
+  policy            AttendancePolicy? @relation(fields: [policyId], references: [id])
   overtimeReviewer  User?    @relation("AttendanceOvertimeReviewer", fields: [overtimeReviewerId], references: [id])
   manualCorrector   User?    @relation("AttendanceManualCorrector", fields: [manualCorrectedById], references: [id])
+  auditLogs         AttendanceAuditLog[]
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   @@unique([userId, attendanceDate])
+  @@index([policyId])
 }
 
 model LoginActivity {
@@ -264,4 +366,21 @@ model AttendanceRegularization {
 
   @@index([userId, attendanceDate])
   @@index([status, attendanceDate])
+}
+
+model AttendanceAuditLog {
+  id              Int      @id @default(autoincrement())
+  attendanceId    Int
+  changedByUserId Int?
+  changeType      String
+  fieldName       String
+  oldValue        String?
+  newValue        String?
+  changeReason    String?
+  createdAt       DateTime @default(now())
+
+  attendance      Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  changedByUser   User?      @relation("AttendanceAuditChangedBy", fields: [changedByUserId], references: [id])
+
+  @@index([attendanceId, createdAt])
 }

@@ -3,6 +3,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import attendanceRoutes from './routes/attendance';
+import attendancePolicyRoutes from './routes/attendance-policies';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import departmentRoutes from './routes/departments';
@@ -12,6 +13,8 @@ import timesheetRoutes from './routes/timesheets';
 import payrollRoutes from './routes/payroll';
 import leaveRoutes from './routes/leaves';
 import dashboardRoutes from './routes/dashboard';
+import workLocationRoutes from './routes/work-locations';
+import weeklyOffRuleRoutes from './routes/weekly-off-rules';
 import { errorMiddleware } from './middlewares/errorMiddleware';
 import { seedSuperAdminIfNeeded } from './utils/seedSuperAdmin';
 
@@ -31,6 +34,7 @@ app.use(cookieParser());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/attendance-policies', attendancePolicyRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/holidays', holidayRoutes);
@@ -39,6 +43,8 @@ app.use('/api/timesheets', timesheetRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/work-locations', workLocationRoutes);
+app.use('/api/weekly-off-rules', weeklyOffRuleRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

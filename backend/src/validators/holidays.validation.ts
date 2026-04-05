@@ -12,5 +12,7 @@ export const holidayQuerySchema = z.object({
 export const holidayCreateSchema = z.object({
   name: z.string().min(1).max(120),
   holidayDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  workLocationId: z.coerce.number().nullable().optional(),
+  isOptional: z.boolean().optional(),
   description: z.string().max(500).optional(),
 });

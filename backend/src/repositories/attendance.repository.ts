@@ -12,17 +12,28 @@ export const findAttendanceForDate = (userId: UserId, attendanceDate: Date) => {
         attendanceDate,
       },
     },
+    include: {
+      policy: true,
+    },
   });
 };
 
 export const createAttendance = (data: Prisma.AttendanceUncheckedCreateInput) => {
-  return prisma.attendance.create({ data });
+  return prisma.attendance.create({
+    data,
+    include: {
+      policy: true,
+    },
+  });
 };
 
 export const updateAttendance = (id: AttendanceId, data: Prisma.AttendanceUncheckedUpdateInput) => {
   return prisma.attendance.update({
     where: { id },
     data,
+    include: {
+      policy: true,
+    },
   });
 };
 
@@ -73,9 +84,11 @@ export const findAttendanceById = (id: AttendanceId) => {
           lastName: true,
           role: true,
           managerId: true,
+          workLocationId: true,
           department: { select: { name: true } },
         },
       },
+      policy: true,
       overtimeReviewer: {
         select: {
           id: true,
@@ -112,9 +125,11 @@ export const findAttendanceForDateWithRelations = (userId: UserId, attendanceDat
           lastName: true,
           role: true,
           managerId: true,
+          workLocationId: true,
           department: { select: { name: true } },
         },
       },
+      policy: true,
       overtimeReviewer: {
         select: {
           id: true,
@@ -161,9 +176,11 @@ export const listOvertimeForReview = (reviewerId: UserId, elevated: boolean) => 
           lastName: true,
           role: true,
           managerId: true,
+          workLocationId: true,
           department: { select: { name: true } },
         },
       },
+      policy: true,
       overtimeReviewer: {
         select: {
           id: true,

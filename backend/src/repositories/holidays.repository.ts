@@ -14,13 +14,20 @@ export const listHolidays = (from?: Date, to?: Date) => {
             },
           }
         : undefined,
+    include: {
+      workLocation: { select: { id: true, name: true, code: true } },
+    },
     orderBy: { holidayDate: 'asc' },
   });
 };
 
-export const findHolidayByDate = (holidayDate: Date) => {
-  return prisma.holiday.findUnique({
-    where: { holidayDate },
+export const findHolidayByDate = (holidayDate: Date, workLocationId?: number | null) => {
+  return prisma.holiday.findFirst({
+    where: {
+      holidayDate,
+      OR: [{ workLocationId: null }, { workLocationId: workLocationId ?? null }],
+    },
+    orderBy: { workLocationId: 'desc' },
   });
 };
 
