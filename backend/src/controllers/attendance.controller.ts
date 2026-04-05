@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { AttendanceRegularizationStatus, AttendanceRegularizationType, WorkMode } from '@prisma/client';
+import { AttendanceOvertimeStatus, AttendanceRegularizationStatus, AttendanceRegularizationType, WorkMode } from '@prisma/client';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { attendanceService } from '../services';
 import { asyncHandler } from '../utils/http';
@@ -121,4 +121,21 @@ export const reviewRegularizationHandler = asyncHandler(async (req: AuthRequest,
   });
 
   res.json({ success: true, message: 'Attendance regularization reviewed', data: regularization });
+});
+
+export const reviewOvertimeHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const { id } = req.params as unknown as { id: number };
+  const { status, reviewNotes } = req.body as {
+    status: AttendanceOvertimeStatus;
+    reviewNotes?: string;
+  };
+
+  const attendance = await attendanceService.reviewOvertime({
+    attendanceId: id,
+    reviewer: req.user!,
+    status,
+    reviewNotes,
+  });
+
+  res.json({ success: true, message: 'Attendance overtime reviewed', data: attendance });
 });

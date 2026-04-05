@@ -2,6 +2,7 @@ import {
   AttendanceDayStatus,
   AttendanceRegularizationStatus,
   AttendanceRegularizationType,
+  AttendanceOvertimeStatus,
   Role,
   WorkMode,
 } from '@prisma/client';
@@ -19,6 +20,7 @@ const LATE_AFTER_MINUTE = 15;
 const HALF_DAY_AFTER_HOUR = 13;
 const HALF_DAY_AFTER_MINUTE = 0;
 const HALF_DAY_MIN_WORKING_HOURS = 4.5;
+const STANDARD_WORKING_HOURS = 8;
 
 const ensureAttendanceRequired = (role: Role) => {
   if (role === 'SUPER_ADMIN') {
@@ -49,18 +51,34 @@ const computeAttendanceMetrics = (checkInAt: Date, checkOutAt?: Date | null) => 
       lateMark,
       workingHours: null,
       dayStatus: (lateMark ? 'LATE' : 'PRESENT') as AttendanceDayStatus,
+      overtimeMinutes: 0,
+      overtimeStatus: null as AttendanceOvertimeStatus | null,
     };
   }
 
   const workedHours = Math.max(0, (checkOutAt.getTime() - checkInAt.getTime()) / (1000 * 60 * 60));
   const isHalfDay = workedHours < HALF_DAY_MIN_WORKING_HOURS || checkInMinute >= halfDayThreshold;
+  const overtimeMinutes = Math.max(0, Math.round((workedHours - STANDARD_WORKING_HOURS) * 60));
 
   return {
     lateMark,
     workingHours: Number(workedHours.toFixed(2)),
     dayStatus: (isHalfDay ? 'HALF_DAY' : lateMark ? 'LATE' : 'PRESENT') as AttendanceDayStatus,
+    overtimeMinutes,
+    overtimeStatus: (overtimeMinutes > 0 ? 'PENDING' : null) as AttendanceOvertimeStatus | null,
   };
 };
+
+const getOvertimeUpdatePayload = (metrics: {
+  overtimeMinutes: number;
+  overtimeStatus: AttendanceOvertimeStatus | null;
+}) => ({
+  overtimeMinutes: metrics.overtimeMinutes,
+  overtimeStatus: metrics.overtimeStatus,
+  overtimeReviewerId: null,
+  overtimeReviewNotes: null,
+  overtimeReviewedAt: null,
+});
 
 const resolveMonthlyRange = (month?: number, year?: number) => {
   const now = new Date();
@@ -126,6 +144,8 @@ export const checkIn = async (input: {
     dayStatus: metrics.dayStatus,
     lateMark: metrics.lateMark,
     workingHours: metrics.workingHours ?? undefined,
+    overtimeMinutes: metrics.overtimeMinutes,
+    overtimeStatus: metrics.overtimeStatus,
     checkInAt,
     checkInLatitude: input.latitude,
     checkInLongitude: input.longitude,
@@ -162,6 +182,11 @@ export const checkOut = async (input: {
     dayStatus: metrics.dayStatus,
     lateMark: metrics.lateMark,
     workingHours: metrics.workingHours,
+    overtimeMinutes: metrics.overtimeMinutes,
+    overtimeStatus: metrics.overtimeStatus,
+    overtimeReviewerId: null,
+    overtimeReviewNotes: null,
+    overtimeReviewedAt: null,
     checkOutLatitude: input.latitude,
     checkOutLongitude: input.longitude,
     checkOutIpAddress: input.ipAddress,
@@ -207,6 +232,8 @@ export const getMonthlyAttendance = async (input: {
       workMode: record?.workMode ?? null,
       checkInAt: record?.checkInAt ?? null,
       checkOutAt: record?.checkOutAt ?? null,
+      overtimeMinutes: record?.overtimeMinutes ?? 0,
+      overtimeStatus: record?.overtimeStatus ?? null,
     };
   });
 
@@ -231,6 +258,8 @@ export const getMonthlyAttendance = async (input: {
       lateDays: records.filter((record) => record.dayStatus === 'LATE').length,
       halfDays: records.filter((record) => record.dayStatus === 'HALF_DAY').length,
       absentDays: days.filter((day) => day.status === 'ABSENT').length,
+      overtimeDays: records.filter((record) => record.overtimeMinutes > 0).length,
+      pendingOvertimeDays: records.filter((record) => record.overtimeStatus === 'PENDING').length,
     },
     days,
   };
@@ -294,10 +323,16 @@ const validateRegularizationPayload = (input: {
 };
 
 export const getRegularizations = async (requester: { id: number; role: Role }) => {
-  const [myRequests, reviewRequests] = await Promise.all([
+  const [myRequests, reviewRequests, overtimeRequests] = await Promise.all([
     attendanceRegularizationRepository.listRegularizationsForUser(requester.id),
     ATTENDANCE_REVIEW_ROLES.includes(requester.role)
       ? attendanceRegularizationRepository.listRegularizationsForReview(
+          requester.id,
+          canElevatedReviewRegularization(requester.role),
+        )
+      : Promise.resolve([]),
+    ATTENDANCE_REVIEW_ROLES.includes(requester.role)
+      ? attendanceRepository.listOvertimeForReview(
           requester.id,
           canElevatedReviewRegularization(requester.role),
         )
@@ -307,6 +342,7 @@ export const getRegularizations = async (requester: { id: number; role: Role }) 
   return {
     myRequests,
     reviewRequests,
+    overtimeRequests,
   };
 };
 
@@ -368,6 +404,7 @@ const applyRegularizationToAttendance = async (request: Awaited<ReturnType<typeo
         dayStatus: metrics.dayStatus,
         lateMark: metrics.lateMark,
         workingHours: metrics.workingHours,
+        ...getOvertimeUpdatePayload(metrics),
       });
     }
 
@@ -380,6 +417,8 @@ const applyRegularizationToAttendance = async (request: Awaited<ReturnType<typeo
       dayStatus: metrics.dayStatus,
       lateMark: metrics.lateMark,
       workingHours: metrics.workingHours ?? undefined,
+      overtimeMinutes: metrics.overtimeMinutes,
+      overtimeStatus: metrics.overtimeStatus,
     });
   }
 
@@ -399,6 +438,7 @@ const applyRegularizationToAttendance = async (request: Awaited<ReturnType<typeo
       dayStatus: metrics.dayStatus,
       lateMark: metrics.lateMark,
       workingHours: metrics.workingHours,
+      ...getOvertimeUpdatePayload(metrics),
     });
   }
 
@@ -416,6 +456,7 @@ const applyRegularizationToAttendance = async (request: Awaited<ReturnType<typeo
         dayStatus: metrics.dayStatus,
         lateMark: metrics.lateMark,
         workingHours: metrics.workingHours,
+        ...getOvertimeUpdatePayload(metrics),
       });
     }
 
@@ -429,6 +470,8 @@ const applyRegularizationToAttendance = async (request: Awaited<ReturnType<typeo
       dayStatus: metrics.dayStatus,
       lateMark: metrics.lateMark,
       workingHours: metrics.workingHours ?? undefined,
+      overtimeMinutes: metrics.overtimeMinutes,
+      overtimeStatus: metrics.overtimeStatus,
     });
   }
 
@@ -447,6 +490,7 @@ const applyRegularizationToAttendance = async (request: Awaited<ReturnType<typeo
     dayStatus: metrics.dayStatus,
     lateMark: metrics.lateMark,
     workingHours: metrics.workingHours,
+    ...getOvertimeUpdatePayload(metrics),
   });
 };
 
@@ -482,5 +526,40 @@ export const reviewRegularization = async (input: {
     reviewerId: input.reviewer.id,
     reviewNotes: input.reviewNotes,
     reviewedAt: new Date(),
+  });
+};
+
+export const reviewOvertime = async (input: {
+  attendanceId: number;
+  reviewer: { id: number; role: Role };
+  status: AttendanceOvertimeStatus;
+  reviewNotes?: string;
+}) => {
+  const attendance = await attendanceRepository.findAttendanceById(input.attendanceId);
+
+  if (!attendance) {
+    throw new AppError(404, 'Attendance record not found');
+  }
+
+  if (attendance.overtimeMinutes <= 0) {
+    throw new AppError(400, 'This attendance record does not have overtime to review');
+  }
+
+  const isElevatedReviewer = canElevatedReviewRegularization(input.reviewer.role);
+  const isReportingManager = attendance.user.managerId === input.reviewer.id;
+
+  if (!isElevatedReviewer && !isReportingManager) {
+    throw new AppError(403, 'You are not allowed to review this overtime request');
+  }
+
+  if (attendance.overtimeStatus && attendance.overtimeStatus !== 'PENDING') {
+    throw new AppError(409, 'This overtime request has already been reviewed');
+  }
+
+  return attendanceRepository.updateAttendance(attendance.id, {
+    overtimeStatus: input.status,
+    overtimeReviewerId: input.reviewer.id,
+    overtimeReviewNotes: input.reviewNotes,
+    overtimeReviewedAt: new Date(),
   });
 };

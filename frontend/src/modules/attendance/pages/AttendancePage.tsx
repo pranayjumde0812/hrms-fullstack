@@ -15,6 +15,9 @@ type AttendanceRecord = {
   dayStatus?: 'PRESENT' | 'LATE' | 'HALF_DAY';
   lateMark?: boolean;
   workingHours?: number | null;
+  overtimeMinutes?: number;
+  overtimeStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
+  overtimeReviewedAt?: string | null;
   checkInAt: string;
   checkOutAt?: string | null;
 };
@@ -62,6 +65,37 @@ type AttendanceRegularization = {
     lastName: string;
     role: AttendanceUser['role'];
   } | null;
+};
+
+type AttendanceOvertimeRequest = {
+  id: number;
+  attendanceDate: string;
+  overtimeMinutes: number;
+  overtimeStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
+  overtimeReviewedAt?: string | null;
+  overtimeReviewNotes?: string | null;
+  user: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    role: AttendanceUser['role'];
+    managerId?: number | null;
+    department: {
+      name: string;
+    } | null;
+  };
+  overtimeReviewer?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    role: AttendanceUser['role'];
+  } | null;
+  checkInAt: string;
+  checkOutAt?: string | null;
+  workMode: WorkMode;
+  dayStatus: 'PRESENT' | 'LATE' | 'HALF_DAY';
+  lateMark: boolean;
+  workingHours?: number | null;
 };
 
 type AttendanceUser = {
@@ -119,6 +153,12 @@ const attendanceDayStatusLabels = {
   HALF_DAY: 'Half Day',
 } as const;
 
+const overtimeStatusLabels = {
+  PENDING: 'Pending',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+} as const;
+
 const formatDateTime = (value?: string | null) => {
   if (!value) {
     return 'Pending';
@@ -154,6 +194,17 @@ const formatDuration = (start: string, end?: string | null) => {
   return `${hours}h ${minutes}m`;
 };
 
+const formatOvertime = (minutes?: number | null) => {
+  if (!minutes || minutes <= 0) {
+    return '--';
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+
+  return `${hours}h ${remainder}m`;
+};
+
 export function AttendancePage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -162,6 +213,7 @@ export function AttendancePage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isRegularizationModalOpen, setIsRegularizationModalOpen] = useState(false);
   const [reviewingRequest, setReviewingRequest] = useState<AttendanceRegularization | null>(null);
+  const [reviewingOvertime, setReviewingOvertime] = useState<AttendanceOvertimeRequest | null>(null);
   const [selectedMonthNumber, setSelectedMonthNumber] = useState(() => new Date().getMonth() + 1);
   const [selectedYearNumber, setSelectedYearNumber] = useState(() => new Date().getFullYear());
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -203,6 +255,7 @@ export function AttendancePage() {
             res.data as {
               myRequests: AttendanceRegularization[];
               reviewRequests: AttendanceRegularization[];
+              overtimeRequests: AttendanceOvertimeRequest[];
             },
         ),
     enabled: !!user,
@@ -314,6 +367,19 @@ export function AttendancePage() {
     },
   });
 
+  const reviewOvertimeMutation = useMutation({
+    mutationFn: async (status: RegularizationStatus) =>
+      api.patch(`/attendance/overtime/${reviewingOvertime!.id}`, {
+        status,
+        reviewNotes: reviewNotes || undefined,
+      }),
+    onSuccess: async () => {
+      await refreshAttendance();
+      setReviewingOvertime(null);
+      setReviewNotes('');
+    },
+  });
+
   useEffect(() => {
     if (user && selectedUserId == null && attendanceUsers.length > 0) {
       setSelectedUserId(canReviewOtherAttendance ? user.id : attendanceUsers[0].id);
@@ -330,7 +396,9 @@ export function AttendancePage() {
   const monthLabel = selectedMonthDate.toLocaleDateString([], { month: 'long', year: 'numeric' });
   const myRegularizations = regularizationsData?.myRequests ?? [];
   const reviewRegularizations = regularizationsData?.reviewRequests ?? [];
+  const overtimeRequests = regularizationsData?.overtimeRequests ?? [];
   const pendingReviewCount = reviewRegularizations.filter((request) => request.status === 'PENDING').length;
+  const pendingOvertimeCount = overtimeRequests.filter((request) => request.overtimeStatus === 'PENDING').length;
   const todayStatus = todayAttendance?.dayStatus ?? (isCheckedIn ? 'PRESENT' : undefined);
 
   const handleCheckIn = async () => {
@@ -373,6 +441,16 @@ export function AttendancePage() {
     }
   };
 
+  const handleReviewOvertime = async (status: RegularizationStatus) => {
+    try {
+      await reviewOvertimeMutation.mutateAsync(status);
+      setFeedback({ type: 'success', message: `Overtime request ${status.toLowerCase()}.` });
+    } catch (error) {
+      const message = (error as any)?.response?.data?.message || 'Unable to review overtime request.';
+      setFeedback({ type: 'error', message });
+    }
+  };
+
   if (isLoading) {
     return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading attendance...</div>;
   }
@@ -398,6 +476,9 @@ export function AttendancePage() {
         )}
         {canReviewOtherAttendance && pendingReviewCount > 0 && (
           <Badge variant="warning">{pendingReviewCount} pending regularization review{pendingReviewCount > 1 ? 's' : ''}</Badge>
+        )}
+        {canReviewOtherAttendance && pendingOvertimeCount > 0 && (
+          <Badge variant="warning">{pendingOvertimeCount} pending overtime review{pendingOvertimeCount > 1 ? 's' : ''}</Badge>
         )}
         {!isAttendanceRequired && (
           <Badge variant="warning">Super Admin is exempt from daily check-in</Badge>
@@ -520,10 +601,15 @@ export function AttendancePage() {
               <p className="text-lg font-semibold">
                 {todayAttendance?.workingHours != null
                   ? `${todayAttendance.workingHours.toFixed(2)} hrs`
-                  : todayAttendance
-                    ? formatDuration(todayAttendance.checkInAt, todayAttendance.checkOutAt)
-                    : '--'}
+                : todayAttendance
+                  ? formatDuration(todayAttendance.checkInAt, todayAttendance.checkOutAt)
+                  : '--'}
               </p>
+              {todayAttendance?.overtimeMinutes && todayAttendance.overtimeMinutes > 0 ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Overtime: {formatOvertime(todayAttendance.overtimeMinutes)} {todayAttendance.overtimeStatus ? `(${overtimeStatusLabels[todayAttendance.overtimeStatus]})` : ''}
+                </p>
+              ) : null}
             </div>
             <div className="rounded-xl border p-4">
               <div className="mb-2 flex items-center gap-2 text-muted-foreground">
@@ -555,13 +641,14 @@ export function AttendancePage() {
                   <th className="px-4 py-3 font-medium">Check In</th>
                   <th className="px-4 py-3 font-medium">Check Out</th>
                   <th className="px-4 py-3 font-medium">Duration</th>
+                  <th className="px-4 py-3 font-medium">Overtime</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {attendanceHistory.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                       No attendance has been recorded yet.
                     </td>
                   </tr>
@@ -576,6 +663,11 @@ export function AttendancePage() {
                         {record.workingHours != null
                           ? `${record.workingHours.toFixed(2)} hrs`
                           : formatDuration(record.checkInAt, record.checkOutAt)}
+                      </td>
+                      <td className="px-4 py-4">
+                        {record.overtimeMinutes && record.overtimeMinutes > 0
+                          ? `${formatOvertime(record.overtimeMinutes)}${record.overtimeStatus ? ` (${overtimeStatusLabels[record.overtimeStatus]})` : ''}`
+                          : '--'}
                       </td>
                       <td className="px-4 py-4">
                         <Badge
@@ -707,6 +799,61 @@ export function AttendancePage() {
                         <p className="mt-2 text-xs text-muted-foreground">
                           Reviewed by {request.reviewer.firstName} {request.reviewer.lastName}
                         </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {canReviewOtherAttendance && (
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-2xl">Overtime review</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isRegularizationLoading ? (
+                <div className="py-8 text-sm text-muted-foreground">Loading overtime queue...</div>
+              ) : overtimeRequests.length === 0 ? (
+                <div className="py-8 text-sm text-muted-foreground">No overtime requests available for review.</div>
+              ) : (
+                <div className="space-y-3">
+                  {overtimeRequests.map((request) => (
+                    <div key={request.id} className="rounded-xl border p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium">
+                            {request.user.firstName} {request.user.lastName}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(request.attendanceDate).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={
+                            request.overtimeStatus === 'APPROVED'
+                              ? 'success'
+                              : request.overtimeStatus === 'REJECTED'
+                                ? 'destructive'
+                                : 'warning'
+                          }
+                        >
+                          {request.overtimeStatus ?? 'PENDING'}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 text-sm text-muted-foreground">
+                        Overtime: {formatOvertime(request.overtimeMinutes)} {request.workingHours != null ? `(${request.workingHours.toFixed(2)} hrs worked)` : ''}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {request.workMode} · {request.dayStatus}
+                        {request.overtimeReviewer ? ` · Reviewed by ${request.overtimeReviewer.firstName} ${request.overtimeReviewer.lastName}` : ''}
+                      </div>
+                      {request.overtimeStatus === 'PENDING' ? (
+                        <div className="mt-4 flex gap-2">
+                          <Button variant="outline" onClick={() => setReviewingOvertime(request)}>Review</Button>
+                        </div>
                       ) : null}
                     </div>
                   ))}
@@ -1038,6 +1185,60 @@ export function AttendancePage() {
               </Button>
               <Button onClick={() => handleReviewRegularization('APPROVED')} disabled={reviewRegularizationMutation.isPending}>
                 {reviewRegularizationMutation.isPending ? 'Saving...' : 'Approve'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={!!reviewingOvertime}
+        onClose={() => {
+          setReviewingOvertime(null);
+          setReviewNotes('');
+        }}
+        title="Review Overtime Request"
+      >
+        {reviewingOvertime && (
+          <div className="space-y-4">
+            <div>
+              <p className="font-medium">
+                {reviewingOvertime.user.firstName} {reviewingOvertime.user.lastName}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {new Date(reviewingOvertime.attendanceDate).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            </div>
+            <div className="rounded-lg border p-3 text-sm text-muted-foreground">
+              <p>Overtime: {formatOvertime(reviewingOvertime.overtimeMinutes)}</p>
+              <p className="mt-2">
+                Work mode: {workModeLabels[reviewingOvertime.workMode]} · Status: {attendanceDayStatusLabels[reviewingOvertime.dayStatus]}
+              </p>
+              <p className="mt-2">
+                {reviewingOvertime.workingHours != null
+                  ? `Worked ${reviewingOvertime.workingHours.toFixed(2)} hrs from ${formatTime(reviewingOvertime.checkInAt)} to ${formatTime(reviewingOvertime.checkOutAt)}`
+                  : `Check-in at ${formatTime(reviewingOvertime.checkInAt)} and check-out at ${formatTime(reviewingOvertime.checkOutAt)}`}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="overtime-review-notes">Review Notes</Label>
+              <Textarea
+                id="overtime-review-notes"
+                value={reviewNotes}
+                onChange={(event) => setReviewNotes(event.target.value)}
+                placeholder="Optional note for approval or rejection."
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => handleReviewOvertime('REJECTED')}
+                disabled={reviewOvertimeMutation.isPending}
+              >
+                Reject
+              </Button>
+              <Button onClick={() => handleReviewOvertime('APPROVED')} disabled={reviewOvertimeMutation.isPending}>
+                {reviewOvertimeMutation.isPending ? 'Saving...' : 'Approve'}
               </Button>
             </div>
           </div>

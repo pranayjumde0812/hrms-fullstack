@@ -16,3 +16,8 @@ export const attendanceMonthlyQuerySchema = z.object({
   year: z.coerce.number().min(2000).max(3000).optional(),
   userId: z.coerce.number().optional(),
 });
+
+export const attendanceOvertimeReviewSchema = z.object({
+  status: z.enum(['APPROVED', 'REJECTED']),
+  reviewNotes: z.string().max(500).optional(),
+});

@@ -48,6 +48,12 @@ enum AttendanceDayStatus {
   HALF_DAY
 }
 
+enum AttendanceOvertimeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ----------------------------------------------------
 // ENTITIES
 // ----------------------------------------------------
@@ -72,6 +78,7 @@ model User {
   attendances    Attendance[]
   attendanceRegularizations AttendanceRegularization[] @relation("AttendanceRegularizationRequester")
   reviewedAttendanceRegularizations AttendanceRegularization[] @relation("AttendanceRegularizationReviewer")
+  reviewedOvertimeAttendances Attendance[] @relation("AttendanceOvertimeReviewer")
   loginActivities LoginActivity[]
   payrolls       Payroll[]
   leaves         Leave[]
@@ -159,6 +166,11 @@ model Attendance {
   dayStatus         AttendanceDayStatus @default(PRESENT)
   lateMark          Boolean   @default(false)
   workingHours      Float?
+  overtimeMinutes   Int       @default(0)
+  overtimeStatus    AttendanceOvertimeStatus?
+  overtimeReviewerId Int?
+  overtimeReviewNotes String?
+  overtimeReviewedAt DateTime?
   checkInAt         DateTime
   checkOutAt        DateTime?
   checkInLatitude   Float?
@@ -171,6 +183,7 @@ model Attendance {
   checkOutUserAgent String?
 
   user              User     @relation(fields: [userId], references: [id])
+  overtimeReviewer  User?    @relation("AttendanceOvertimeReviewer", fields: [overtimeReviewerId], references: [id])
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

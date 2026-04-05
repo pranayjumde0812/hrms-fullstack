@@ -3,7 +3,12 @@ import { attendanceController } from '../controllers';
 import { authenticate } from '../middlewares/authMiddleware';
 import { validateBody, validateParams, validateQuery } from '../middlewares/validationMiddleware';
 import { userIdParamSchema } from '../validators/users.validation';
-import { attendanceCheckInSchema, attendanceCheckOutSchema, attendanceMonthlyQuerySchema } from '../validators/attendance.validation';
+import {
+  attendanceCheckInSchema,
+  attendanceCheckOutSchema,
+  attendanceMonthlyQuerySchema,
+  attendanceOvertimeReviewSchema,
+} from '../validators/attendance.validation';
 import { attendanceRegularizationCreateSchema, attendanceRegularizationReviewSchema } from '../validators/attendance-regularization.validation';
 
 const router = Router();
@@ -16,6 +21,7 @@ router.get('/viewable-users', attendanceController.getViewableAttendanceUsersHan
 router.get('/regularizations', attendanceController.getRegularizationsHandler);
 router.post('/regularizations', validateBody(attendanceRegularizationCreateSchema), attendanceController.createRegularizationHandler);
 router.patch('/regularizations/:id', validateParams(userIdParamSchema), validateBody(attendanceRegularizationReviewSchema), attendanceController.reviewRegularizationHandler);
+router.patch('/overtime/:id', validateParams(userIdParamSchema), validateBody(attendanceOvertimeReviewSchema), attendanceController.reviewOvertimeHandler);
 router.post('/check-in', validateBody(attendanceCheckInSchema), attendanceController.checkInHandler);
 router.post('/check-out', validateBody(attendanceCheckOutSchema), attendanceController.checkOutHandler);
 

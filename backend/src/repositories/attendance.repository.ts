@@ -46,3 +46,86 @@ export const listAttendanceForUserInRange = (userId: UserId, from: Date, to: Dat
     orderBy: { attendanceDate: 'asc' },
   });
 };
+
+export const listAttendanceForUsersOnDate = (userIds: UserId[], attendanceDate: Date) => {
+  if (userIds.length === 0) {
+    return Promise.resolve([]);
+  }
+
+  return prisma.attendance.findMany({
+    where: {
+      userId: {
+        in: userIds,
+      },
+      attendanceDate,
+    },
+  });
+};
+
+export const findAttendanceById = (id: AttendanceId) => {
+  return prisma.attendance.findUnique({
+    where: { id },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          managerId: true,
+          department: { select: { name: true } },
+        },
+      },
+      overtimeReviewer: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+        },
+      },
+    },
+  });
+};
+
+export const listOvertimeForReview = (reviewerId: UserId, elevated: boolean) => {
+  return prisma.attendance.findMany({
+    where: elevated
+      ? {
+          overtimeMinutes: {
+            gt: 0,
+          },
+          overtimeStatus: 'PENDING',
+        }
+      : {
+          overtimeMinutes: {
+            gt: 0,
+          },
+          overtimeStatus: 'PENDING',
+          user: {
+            managerId: reviewerId,
+          },
+        },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          managerId: true,
+          department: { select: { name: true } },
+        },
+      },
+      overtimeReviewer: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+        },
+      },
+    },
+    orderBy: { updatedAt: 'desc' as Prisma.SortOrder },
+  });
+};

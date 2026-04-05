@@ -16,7 +16,7 @@ Status guide:
 - `[x]` Super Admin attendance exemption
 - `[x]` Attendance regularization request
 - `[x]` Late mark and half-day calculation
-- `[ ]` Overtime tracking and approval
+- `[x]` Overtime tracking and approval
 - `[ ]` Attendance remarks and manual HR correction
 - `[ ]` Holiday and weekly-off attendance handling
 
@@ -24,8 +24,8 @@ Status guide:
 - `[x]` Reporting manager mapping
 - `[ ]` Team attendance today widget
 - `[ ]` Missed check-in alerts for managers
-- `[ ]` Approve or reject attendance correction requests
-- `[ ]` Team monthly attendance review
+- `[x]` Approve or reject attendance correction requests
+- `[x]` Team monthly attendance review
 
 ### 3. Leave management
 - `[ ]` Leave types: casual, sick, earned, unpaid
@@ -141,13 +141,13 @@ Status guide:
 
 Build these first for the fastest jump in real-world usability:
 
-1. `[ ]` Reporting manager mapping
-2. `[ ]` Attendance regularization request
-3. `[ ]` Attendance approval flow
+1. `[x]` Reporting manager mapping
+2. `[x]` Attendance regularization request
+3. `[x]` Attendance approval flow
 4. `[ ]` Leave balance tracking
 5. `[ ]` Leave request and approval workflow
 6. `[ ]` Holiday calendar
-7. `[ ]` Late mark / half-day / overtime rules
+7. `[x]` Late mark / half-day / overtime rules
 8. `[ ]` Attendance to payroll integration
 9. `[ ]` Employee self-service profile and documents
 10. `[ ]` Manager dashboard
@@ -157,9 +157,9 @@ Build these first for the fastest jump in real-world usability:
 If we want to continue development in the best sequence, start here:
 
 ### Sprint A
-- `[ ]` Reporting manager mapping
-- `[ ]` Attendance regularization request
-- `[ ]` Attendance approval by manager / HR
+- `[x]` Reporting manager mapping
+- `[x]` Attendance regularization request
+- `[x]` Attendance approval by manager / HR
 
 ### Sprint B
 - `[ ]` Leave balances
@@ -167,7 +167,7 @@ If we want to continue development in the best sequence, start here:
 - `[ ]` Holiday calendar
 
 ### Sprint C
-- `[ ]` Late mark / half-day / overtime
+- `[x]` Late mark / half-day / overtime
 - `[ ]` Payroll attendance linkage
 - `[ ]` Manager dashboard
 
@@ -175,4 +175,5 @@ If we want to continue development in the best sequence, start here:
 
 - `PROJECT_MANAGER` is currently the closest available role to act like a manager.
 - If we want real reporting structures, we should add `managerId` or a reporting hierarchy to the user model.
+- Overtime tracking and approval is now implemented on attendance records with manager / HR review.
 - Most industry-ready HRMS workflows depend on approval chains, holiday logic, and payroll rules.
