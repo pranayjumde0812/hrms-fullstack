@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE `user` ADD COLUMN `confirmationDate` DATETIME(3) NULL,
+ALTER TABLE `User` ADD COLUMN `confirmationDate` DATETIME(3) NULL,
     ADD COLUMN `designation` VARCHAR(191) NULL,
     ADD COLUMN `employeeCode` VARCHAR(191) NULL,
     ADD COLUMN `employmentType` ENUM('FULL_TIME', 'PART_TIME', 'INTERN', 'CONTRACTOR', 'CONSULTANT') NOT NULL DEFAULT 'FULL_TIME',

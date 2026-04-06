@@ -1,12 +1,12 @@
 -- DropIndex
-DROP INDEX `Holiday_holidayDate_key` ON `holiday`;
+DROP INDEX `Holiday_holidayDate_key` ON `Holiday`;
 
 -- AlterTable
-ALTER TABLE `attendance` ADD COLUMN `policyId` INTEGER NULL,
+ALTER TABLE `Attendance` ADD COLUMN `policyId` INTEGER NULL,
     ADD COLUMN `source` ENUM('WEB', 'MANUAL_CORRECTION', 'REGULARIZATION', 'IMPORT') NOT NULL DEFAULT 'WEB';
 
 -- AlterTable
-ALTER TABLE `holiday` ADD COLUMN `isOptional` BOOLEAN NOT NULL DEFAULT false,
+ALTER TABLE `Holiday` ADD COLUMN `isOptional` BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN `workLocationId` INTEGER NULL;
 
 -- CreateTable
